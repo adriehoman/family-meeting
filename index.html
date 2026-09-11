@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Family Meeting</title>
+<style>
+  :root{
+    --bg:#f6f1e7; --panel:#ffffff; --ink:#1f2a2e; --muted:#5b6a70; --line:#e2d9c8;
+    --accent:#1b7f79; --accent-ink:#ffffff; --accent-soft:#dff0ee; --warn:#b3541e; --warn-soft:#fbe9dd;
+    --ok:#2d7a3a; --ok-soft:#e2f3e5; --chip:#eef2f3;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;font-size:18px;line-height:1.45}
+  button{font:inherit;cursor:pointer;border:0;border-radius:12px;padding:.6em 1.1em;background:var(--chip);color:var(--ink)}
+  button.primary{background:var(--accent);color:var(--accent-ink)}
+  button.ghost{background:transparent;border:2px solid var(--line)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  input,select,textarea{font:inherit;padding:.5em .7em;border:2px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);width:100%}
+  textarea{min-height:120px;resize:vertical}
+  a{color:var(--accent)}
+  .hidden{display:none !important}
+
+  header{display:flex;align-items:center;gap:16px;padding:12px 22px;background:var(--panel);border-bottom:2px solid var(--line)}
+  header h1{margin:0;font-size:1.35rem;font-weight:700;letter-spacing:.2px}
+  header .sub{color:var(--muted);font-size:.95rem}
+  header .spacer{flex:1}
+  header .status{font-size:.9rem;color:var(--muted);display:flex;align-items:center;gap:8px}
+  .dot{width:11px;height:11px;border-radius:50%;background:#c8c8c8;display:inline-block}
+  .dot.ok{background:var(--ok)} .dot.bad{background:var(--warn)}
+
+  main{display:grid;grid-template-columns:minmax(380px,7fr) minmax(360px,5fr);gap:18px;padding:18px 22px;height:calc(100% - 66px)}
+  @media (max-width:960px){main{grid-template-columns:1fr;height:auto}}
+  section.card{background:var(--panel);border:2px solid var(--line);border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;min-height:0;overflow:auto}
+
+  /* Left: conversation */
+  .tiles{flex:none;display:grid;gap:12px;margin-bottom:12px;justify-content:center}
+  .tiles .tile{width:100%;max-width:240px;margin:0 auto}
+  .tile{position:relative;border-radius:14px;overflow:hidden;aspect-ratio:4/3;max-height:170px;background:#e9e2d4;border:4px solid transparent;transition:border-color .2s, box-shadow .2s}
+  .tile .pic{position:absolute;inset:0}
+  .tile .pic img,.tile .pic svg{width:100%;height:100%;object-fit:cover;display:block}
+  .tile .name{position:absolute;left:10px;bottom:10px;background:rgba(20,30,30,.72);color:#fff;padding:4px 12px;border-radius:999px;font-size:.95rem;display:flex;gap:8px;align-items:center}
+  .tile .name .mic{display:none;font-size:.9rem}
+  .tile .name small{opacity:.8;font-weight:400}
+  .tile.speaking{border-color:#2fbf71;box-shadow:0 0 0 4px rgba(47,191,113,.25), 0 8px 24px rgba(0,0,0,.18)}
+  .tile.speaking .name .mic{display:inline}
+  .tile.teacher::after{content:"Played by the teacher";position:absolute;top:10px;right:10px;background:rgba(179,84,30,.9);color:#fff;font-size:.8rem;padding:3px 10px;border-radius:999px}
+  .answer{flex:none;min-height:70px;max-height:26vh;overflow:auto;padding:12px 16px;border-radius:14px;background:var(--accent-soft);font-size:1.15rem;line-height:1.4}
+  .answer .turn{margin-bottom:10px}
+  .answer .turn:last-child{margin-bottom:0}
+  .answer .who{font-size:.85rem;text-transform:uppercase;letter-spacing:1px;color:var(--accent);font-weight:700;margin-bottom:4px}
+  .answer .turn.male .who{color:#8a7440}
+  .answer.thinking{color:var(--muted);font-style:italic}
+  .qrow{flex:none;margin-top:14px;display:flex;gap:10px;align-items:stretch}
+  .qrow textarea{min-height:64px;font-size:1.15rem}
+  .micbtn{min-width:150px;font-size:1.15rem;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border-radius:14px}
+  .micbtn .big{font-size:1.9rem;line-height:1}
+  .micbtn.listening{background:var(--warn);color:#fff;animation:pulse 1.2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(179,84,30,.5)}70%{box-shadow:0 0 0 14px rgba(179,84,30,0)}100%{box-shadow:0 0 0 0 rgba(179,84,30,0)}}
+  .heard{margin-top:8px;font-size:.95rem;color:var(--muted);min-height:1.4em}
+  .qmeta{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+  .badge{font-size:.85rem;padding:.2em .7em;border-radius:999px;background:var(--chip);color:var(--muted)}
+  .badge.open{background:var(--ok-soft);color:var(--ok)} .badge.closed{background:var(--warn-soft);color:var(--warn)}
+  .turnbar{flex:none;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;padding:8px 12px;border-radius:12px;background:#fbf7ee;border:2px solid var(--line)}
+  .turnbar .student{font-weight:700;font-size:1.2rem}
+  .turnbar .dots{display:flex;gap:8px;margin-left:6px}
+  .turnbar .dots i{width:22px;height:22px;border-radius:50%;background:var(--chip);border:3px solid var(--line);display:inline-block;box-shadow:inset 0 0 0 2px #fff}
+  .turnbar .dots i.done{background:var(--accent);border-color:var(--accent)}
+  .turnbar .dots i.open{background:var(--ok);border-color:var(--ok)}
+  .turnbar .dots i.closed{background:var(--warn);border-color:var(--warn)}
+  .coach{flex:none;margin-top:10px;padding:14px 18px;border-radius:12px;background:#fff8dc;border-left:6px solid #e0b93a;font-size:1.3rem;line-height:1.4;min-height:1.4em}
+  .coach.summary{background:var(--ok-soft);border-left-color:var(--ok)}
+  .coach b{color:var(--ink)}
+  .explore{flex:none;margin-top:10px;font-size:1.05rem;color:var(--muted)}
+  .explore span{display:inline-block;background:var(--chip);padding:.15em .7em;border-radius:999px;margin:2px 3px 0 0}
+  .lifeline{background:#fff;border:2px dashed #e0b93a}
+  .lifeline:disabled{border-style:solid;opacity:.45}
+  .log{margin-top:12px;max-height:70px;flex:none;overflow:auto;border-top:2px dashed var(--line);padding-top:8px;font-size:.95rem;color:var(--muted)}
+  .log div{margin:4px 0}
+  .log b{color:var(--ink)}
+
+  /* Right: board */
+  .boardhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .boardhead h2{margin:0;font-size:1.3rem}
+  .progress{font-size:.9rem;color:var(--muted)}
+  .bar{height:8px;background:var(--chip);border-radius:8px;overflow:hidden;margin-bottom:10px}
+  .bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .4s}
+  .board{flex:1;overflow:auto;display:grid;grid-template-columns:1fr 1fr;gap:10px;align-content:start}
+  .col{background:#fbf9f4;border:2px solid var(--line);border-radius:12px;padding:10px 12px;min-height:90px}
+  .col h3{margin:0 0 6px;font-size:1rem;color:var(--accent);text-transform:uppercase;letter-spacing:.6px}
+  .col ul{margin:0;padding-left:18px;font-size:1.02rem}
+  .col li{margin:2px 0;animation:pop .4s}
+  .col li.new{background:#fff5c2;border-radius:6px}
+  .col.concern h3{color:var(--warn)}
+  @keyframes pop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .boardfoot{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+
+  /* Drawers and modals */
+  .drawer{position:fixed;left:0;right:0;bottom:0;background:#fffdf7;border-top:3px solid var(--accent);box-shadow:0 -8px 30px rgba(0,0,0,.15);max-height:55vh;overflow:auto;padding:14px 22px;font-size:.98rem;transform:translateY(100%);transition:transform .25s;z-index:20}
+  .drawer.open{transform:none}
+  .drawer h3{margin:8px 0 4px}
+  .drawer .cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+  @media (max-width:960px){.drawer .cols{grid-template-columns:1fr}}
+  .drawer ul{padding-left:18px;margin:4px 0}
+  .drawer li.done{color:var(--muted);text-decoration:line-through}
+  .modal{position:fixed;inset:0;background:rgba(20,30,30,.55);display:grid;place-items:center;z-index:30;padding:20px}
+  .modal .box{background:#fff;border-radius:18px;max-width:820px;width:100%;max-height:92vh;overflow:auto;padding:22px 26px}
+  .modal h2{margin-top:0}
+  .field{margin:12px 0}
+  .field label{display:block;font-weight:600;margin-bottom:4px}
+  .field .hint{font-size:.9rem;color:var(--muted);margin-top:4px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .row > *{flex:1}
+  .note{background:var(--warn-soft);border-left:5px solid var(--warn);padding:10px 12px;border-radius:8px;font-size:.95rem}
+  .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;z-index:40;font-size:.95rem;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+  kbd{background:var(--chip);padding:1px 6px;border-radius:5px;font-size:.85em;border:1px solid var(--line)}
+  .gate{position:fixed;inset:0;background:var(--bg);z-index:60;display:grid;place-items:center;padding:20px}
+  .gate .box{background:#fff;border:2px solid var(--line);border-radius:18px;padding:28px 30px;max-width:420px;width:100%;text-align:center}
+  .gate input{font-size:1.4rem;text-align:center;letter-spacing:.2em;margin:12px 0}
+  @media print{
+    header,.qrow,.heard,.qmeta,.boardfoot,.drawer,.modal,.toast,section.left{display:none !important}
+    main{display:block;height:auto;padding:0}
+    section.card{border:0}
+    .board{display:block}
+    .col{break-inside:avoid;margin-bottom:10px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1 id="hTitle">Family Meeting</h1>
+    <div class="sub" id="hUnit"></div>
+  </div>
+  <div class="spacer"></div>
+  <div class="status"><span class="dot" id="dotKey"></span><span id="statusText">Not set up yet</span></div>
+  <button id="btnTeacher" class="ghost" title="Teacher notes (press T)">Teacher notes</button>
+  <button id="btnSettings" class="ghost">Settings</button>
+</header>
+
+<main>
+  <section class="card left">
+    <div class="tiles" id="tiles"></div>
+
+    <div class="answer" id="answer"></div>
+
+    <div class="qrow">
+      <button class="micbtn" id="btnMic" title="Hold, speak, release. Or click once to start and again to stop.">
+        <span class="big">&#127908;</span><span id="micLabel">Ask a question</span>
+      </button>
+      <textarea id="question" placeholder="Your question appears here. You can also type it, then press Send or Enter."></textarea>
+      <button class="primary" id="btnSend" style="min-width:110px">Send</button>
+    </div>
+    <div class="heard" id="heard"></div>
+    <div class="turnbar" id="turnbar">
+      <span class="student" id="studentLabel">Student 1</span>
+      <span class="dots" id="dots"></span><span class="badge" style="font-size:.8rem" title="Green = open question, orange = closed question">green open · orange closed</span>
+      <span class="badge hidden" id="qType"></span>
+      <span style="flex:1"></span>
+      <button class="lifeline" id="btnLifeline" title="Show a suggested question (one per student)">Lifeline: show me a question</button>
+      <button id="btnNext" class="ghost">Next student</button>
+      <button id="btnRepeat" class="ghost" title="Say the last answer again">Say again</button>
+      <button id="btnStart" class="primary">Start meeting</button>
+    </div>
+    <div class="coach hidden" id="coach"></div>
+    <div class="explore" id="explore"></div>
+    <span class="hidden" id="qCount"></span><span class="hidden" id="qTip"></span>
+    <div class="log" id="log"></div>
+  </section>
+
+  <section class="card right">
+    <div class="boardhead">
+      <h2>What we have learned about <span id="personName">Wilson</span></h2>
+      <span class="progress" id="progress"></span>
+    </div>
+    <div class="bar"><i id="barFill"></i></div>
+    <div class="board" id="board"></div>
+    <div class="boardfoot">
+      <button id="btnExport">Download board (Word)</button>
+      <button id="btnPrint" class="ghost">Print</button>
+      <button id="btnSave" class="ghost">Save session file</button>
+      <span style="flex:1"></span>
+      <button id="btnReset" class="ghost">Reset</button>
+    </div>
+  </section>
+</main>
+
+<!-- Teacher drawer -->
+<div class="drawer" id="drawer">
+  <div class="row" style="justify-content:space-between">
+    <h3 style="margin:0">Teacher notes (hide this before students look at the screen: press <kbd>T</kbd>)</h3>
+    <button class="ghost" id="btnDrawerClose" style="flex:0">Close</button>
+  </div>
+  <div class="cols">
+    <div>
+      <h3>Your role</h3>
+      <p id="tRole"></p>
+      <h3>Cue lines</h3>
+      <ul id="tCues"></ul>
+    </div>
+    <div>
+      <h3>Still to be uncovered</h3>
+      <ul id="tFacts"></ul>
+    </div>
+    <div>
+      <h3>Debrief questions</h3>
+      <ul id="tDebrief"></ul>
+      <h3>Whisper to <span class="tCharName">Rosie</span></h3>
+      <div class="row">
+        <input id="whisper" placeholder="e.g. Start wrapping up. / Mention you are tired.">
+        <button id="btnWhisper" style="flex:0">Send</button>
+      </div>
+      <div class="hint" style="font-size:.85rem;color:var(--muted)">A whisper is a private instruction. Students do not see it. The next answer follows it.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="modal hidden" id="settings">
+  <div class="box">
+    <h2>Settings</h2>
+
+    <div class="field">
+      <label for="apiKey">Anthropic API key</label>
+      <input id="apiKey" type="password" placeholder="sk-ant-...">
+      <div class="hint">Stored only in this browser on this laptop. Use a separate key with a low monthly spend limit. Never enter student names into this page.</div>
+    </div>
+
+    <div class="field">
+      <label for="model">Model</label>
+      <div class="row">
+        <select id="model"><option value="">Press "Load models" first</option></select>
+        <button id="btnModels" style="flex:0">Load models</button>
+      </div>
+      <div class="hint">A Sonnet model is a good balance of speed and quality for a live class.</div>
+    </div>
+
+    <div class="field">
+      <label for="scenario">Scenario</label>
+      <div class="row">
+        <select id="scenario"></select>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="btnScenarioExport">Download this scenario as a file</button>
+        <label class="ghost" style="text-align:center;padding:.6em 1.1em;border:2px solid var(--line);border-radius:12px;cursor:pointer">Load a scenario file<input type="file" id="scenarioFile" accept=".json" style="display:none"></label>
+      </div>
+      <div class="hint">To make a new case: download a scenario, edit the text in Notepad or ask Claude to rewrite it for a new person, save it as .json, then load it here. Loaded scenarios stay in this browser.</div>
+    </div>
+
+    <div class="field" id="castField">
+      <label>Who plays each family member</label>
+      <div id="castRows"></div>
+      <div class="hint">Choose "Me (teacher)" if you want to play that person yourself. The AI then leaves their lines to you.</div>
+    </div>
+
+    <div class="field">
+      <label>Pictures</label>
+      <div id="picRows"></div>
+      <div class="hint">Drawn portraits are built in. Load your own picture for either person (a square image works best). It is stored in this browser only.</div>
+    </div>
+
+    <div class="field">
+      <label>Student turns and coaching</label>
+      <div class="row">
+        <label>Questions per student <select id="perStudent" style="width:auto"><option>2</option><option selected>3</option><option>4</option></select></label>
+        <label><input type="checkbox" id="coachOn" checked style="width:auto"> Show coaching hints</label>
+        <label><input type="checkbox" id="lifelineOn" checked style="width:auto"> Allow one lifeline per student</label>
+      </div>
+      <div class="hint">Coaching hints talk about technique and which areas are still unexplored. They never give the question away. The lifeline shows one suggested question and can be used once per student.</div>
+    </div>
+
+    <div class="field">
+      <label>Spoken voices</label>
+      <div id="voiceRows"></div>
+      <div class="row" style="margin-top:8px">
+        <label><input type="checkbox" id="speakOn" checked style="width:auto"> Speak the answers out loud</label>
+        <label>Speed <input type="range" id="rate" min="0.7" max="1.2" step="0.05" value="0.95" style="width:140px;vertical-align:middle"></label>
+      </div>
+      <div class="hint">Voices come from Windows and the browser. Microsoft Edge usually has the most natural Australian voices (for example Natasha and William).</div>
+    </div>
+
+    <div class="field">
+      <label for="lang">Microphone language</label>
+      <select id="lang">
+        <option value="en-AU">English (Australia)</option>
+        <option value="en-GB">English (UK)</option>
+        <option value="en-US">English (US)</option>
+        <option value="en-IN">English (India)</option>
+      </select>
+    </div>
+
+    <div class="note" id="browserNote"></div>
+
+    <div class="row" style="margin-top:16px;justify-content:flex-end">
+      <button class="ghost" id="btnHelp" style="flex:0">How to use</button>
+      <span style="flex:1"></span>
+      <button class="primary" id="btnSettingsSave" style="flex:0">Save and close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Help modal -->
+<div class="modal hidden" id="help">
+  <div class="box">
+    <h2>How to run the family meeting</h2>
+    <ol>
+      <li><b>Before class:</b> open Settings, paste your API key, press Load models, choose a Sonnet model, choose the scenario and a voice for each family member. Press Test to hear them. Save.</li>
+      <li><b>Test the microphone</b> once. Click the microphone button, say "Hello Rosie, how are you today?", and check the words appear in the box.</li>
+      <li><b>Start the class:</b> press Start meeting. The family members introduce themselves.</li>
+      <li><b>Students ask questions:</b> press Next student when a new student comes up. Each student asks two or three questions (set in Settings): click the microphone, ask, click again to stop, check the words, press Send. If the microphone mishears, they can fix the words or type. After their last question a short summary of their turn appears. A stuck student can press the lifeline once to see a suggested question.</li>
+      <li><b>The board fills in</b> on the right as information comes out. New points flash yellow. The progress bar shows how much of the story the class has uncovered.</li>
+      <li><b>Teacher notes</b> (press <kbd>T</kbd>) show what is still hidden, cue lines if you play a family member yourself, and debrief questions. Close it before students read the screen. You can whisper a private instruction to the family from there.</li>
+      <li><b>At the end:</b> press Download board (Word) or Print. Students use the board for the progress note and the activity plan.</li>
+    </ol>
+    <p><b>If something fails:</b> the internet or microphone can drop out. Typing still works without a microphone. If the API fails, you have the printed case notes and can play Rosie yourself.</p>
+    <p><b>Privacy:</b> do not say or type student names. Questions go to Anthropic's API under your key. Nothing is stored anywhere except this browser.</p>
+    <div class="row" style="justify-content:flex-end"><button class="primary" id="btnHelpClose" style="flex:0">Close</button></div>
+  </div>
+</div>
+
+<div class="gate hidden" id="gate">
+  <div class="box">
+    <h2 style="margin-top:0">Family Meeting</h2>
+    <p>This page is for classroom use. Enter the PIN.</p>
+    <input id="gatePin" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN">
+    <button class="primary" id="gateGo" style="width:100%">Open</button>
+    <div class="hint" id="gateMsg" style="color:var(--warn);margin-top:8px;min-height:1.2em"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// Original illustrated portraits (flat vector style). Kinds: olderWoman, olderMan, man, woman.
+window.PORTRAITS = (function(){
+  let n=0;
+  function base(bg1, bg2, body){ const id='pg'+(n++);
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">'+
+      '<defs><linearGradient id="'+id+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+bg1+'"/><stop offset="1" stop-color="'+bg2+'"/></linearGradient></defs>'+
+      '<rect width="200" height="200" fill="url(#'+id+')"/>'+body+'</svg>';
+  }
+  const skin = {light:'#f1c9a5', mid:'#e0b088', tan:'#d39c6f'};
+  function face(sk, extra){
+    return '<ellipse cx="100" cy="92" rx="36" ry="42" fill="'+sk+'"/>'+extra;
+  }
+  function shoulders(color){
+    return '<path d="M30 200 C 35 150, 70 138, 100 138 C 130 138, 165 150, 170 200 Z" fill="'+color+'"/>';
+  }
+  function neck(sk){ return '<rect x="86" y="120" width="28" height="26" rx="8" fill="'+sk+'"/>'; }
+  function smile(){ return '<path d="M86 108 Q100 120 114 108" stroke="#8a4a3a" stroke-width="3" fill="none" stroke-linecap="round"/>'; }
+  function eyes(){ return '<circle cx="86" cy="88" r="3.4" fill="#2b2b2b"/><circle cx="114" cy="88" r="3.4" fill="#2b2b2b"/><path d="M78 79 q8 -5 16 0" stroke="#5a4636" stroke-width="2.5" fill="none" stroke-linecap="round"/><path d="M106 79 q8 -5 16 0" stroke="#5a4636" stroke-width="2.5" fill="none" stroke-linecap="round"/>'; }
+  function cheeks(){ return '<circle cx="78" cy="102" r="6" fill="#f0a08a" opacity=".45"/><circle cx="122" cy="102" r="6" fill="#f0a08a" opacity=".45"/>'; }
+  function glasses(){ return '<g fill="none" stroke="#5b4b3a" stroke-width="2.5"><circle cx="86" cy="89" r="11"/><circle cx="114" cy="89" r="11"/><path d="M97 89 h6"/><path d="M75 87 l-9 -3"/><path d="M125 87 l9 -3"/></g>'; }
+  function earrings(){ return '<circle cx="64" cy="104" r="3" fill="#d9b25a"/><circle cx="136" cy="104" r="3" fill="#d9b25a"/>'; }
+
+  const olderWoman = base('#f7ecd9','#e8d3b3',
+    shoulders('#7c9a8e') +
+    '<path d="M70 150 C 80 140, 120 140, 130 150 L 128 200 L 72 200 Z" fill="#f4efe6"/>' +
+    '<path d="M60 160 q40 22 80 0 l0 40 l-80 0 z" fill="#7c9a8e"/>' +
+    neck(skin.light) + face(skin.light,'') +
+    // grey hair, soft bob with volume
+    '<path d="M60 92 C 56 52, 80 40, 100 40 C 122 40, 146 54, 140 94 C 138 70, 124 62, 100 62 C 78 62, 64 70, 60 92 Z" fill="#d9d4cc"/>' +
+    '<path d="M60 92 C 58 104, 60 112, 66 118 C 62 104, 62 96, 66 84 Z" fill="#d9d4cc"/>' +
+    '<path d="M140 94 C 142 106, 140 114, 134 120 C 138 106, 138 98, 134 86 Z" fill="#d9d4cc"/>' +
+    eyes() + glasses() + cheeks() + smile() + earrings() +
+    '<path d="M74 118 q6 4 12 2" stroke="#c88b78" stroke-width="1.5" fill="none" opacity=".6"/><path d="M114 120 q6 2 12 -2" stroke="#c88b78" stroke-width="1.5" fill="none" opacity=".6"/>'
+  );
+
+  const man = base('#e6eef2','#c9d7de',
+    shoulders('#3f5d73') +
+    '<path d="M84 140 L 100 156 L 116 140 L 112 138 L 100 148 L 88 138 Z" fill="#dfe7ec"/>' +
+    neck(skin.mid) + face(skin.mid,'') +
+    // short brown hair
+    '<path d="M64 84 C 62 56, 78 44, 100 44 C 124 44, 138 58, 136 84 C 130 68, 118 62, 100 62 C 82 62, 70 68, 64 84 Z" fill="#5a3f2b"/>' +
+    // stubble
+    '<path d="M70 104 C 74 126, 90 134, 100 134 C 110 134, 126 126, 130 104 C 124 118, 112 124, 100 124 C 88 124, 76 118, 70 104 Z" fill="#8a6a55" opacity=".35"/>' +
+    eyes() + smile() +
+    '<path d="M94 96 q6 6 12 0" stroke="#b37a5e" stroke-width="2" fill="none"/>'
+  );
+
+  const olderMan = base('#efe9dc','#d9d0bd',
+    shoulders('#6d6a8a') +
+    '<path d="M78 140 L 100 152 L 122 140 L 122 200 L 78 200 Z" fill="#f2f0ea"/>' +
+    '<path d="M96 150 l4 -4 l4 4 l-4 30 z" fill="#a33d3d"/>' +
+    neck(skin.light) + face(skin.light,'') +
+    '<path d="M62 80 C 66 58, 82 50, 100 50 C 118 50, 134 58, 138 80 C 132 70, 120 66, 100 66 C 80 66, 68 70, 62 80 Z" fill="#cfcac3"/>' +
+    '<path d="M62 80 C 60 92, 62 100, 66 106 C 64 96, 64 88, 66 80 Z M138 80 C 140 92, 138 100, 134 106 C 136 96, 136 88, 134 80 Z" fill="#cfcac3"/>' +
+    eyes() + glasses() + smile() +
+    '<path d="M88 112 q12 8 24 0" stroke="#bfb8ae" stroke-width="5" fill="none" stroke-linecap="round" opacity=".8"/>'
+  );
+
+  const woman = base('#f3e7ea','#e3ccd3',
+    shoulders('#9a5b6b') +
+    neck(skin.tan) + face(skin.tan,'') +
+    '<path d="M60 96 C 56 56, 78 40, 100 40 C 122 40, 146 56, 140 96 L 140 130 C 136 120, 134 108, 134 92 C 128 70, 116 62, 100 62 C 84 62, 72 70, 66 92 C 66 108, 64 120, 60 130 Z" fill="#3a2a22"/>' +
+    eyes() + cheeks() + smile() + earrings()
+  );
+
+  return { olderWoman, olderMan, man, woman };
+})();
+
+// Built-in scenarios for Family Meeting. Each scenario is plain data.
+// To add a new case, copy one of these objects, change the text, and load it through Settings > Scenario.
+// A scenario can have one or more family members in "characters". Each has their own facts and voice.
+window.BUILTIN_SCENARIOS = [
+{
+  "id": "wilson-blue",
+  "title": "Wilson Blue - Family Meeting",
+  "unit": "CHCAGE011 Provide support to people living with dementia",
+  "person": "Wilson",
+  "setting": "KAMA Community residential aged care service, memory support unit. Wilson moved in yesterday. It is 10.30am. Wilson's wife Rosie and their son Clifton have come in to visit and have agreed to talk with a support worker so staff can support Wilson well. Both are sitting in the family room with the student.",
+  "characters": [
+    {
+      "id": "rosie",
+      "name": "Rosie",
+      "portrait": "olderWoman",
+      "relation": "Wilson's wife",
+      "voice": "female",
+      "opening": "Hello love. I am Rosie, Wilson's wife, and this is our youngest, Clifton. The nurse said you wanted to have a chat about Wilson. Ask us anything you like.",
+      "persona": "Rosie Blue is a warm, practical Australian woman in her late 70s. She has been very happily married to Wilson for 57 years. She knows Wilson better than anyone and is eager to help staff support him well. She is worn out from the last year of caring for him at home and a little emotional about him moving into care yesterday, but she holds it together. She speaks plainly, uses everyday Australian expressions, and sometimes calls people 'love'. She is not a health professional and does not use clinical words like 'sundowning' or 'behaviours of concern' unless a student uses them first. She loves Clifton but is a little embarrassed when he is blunt, and will gently push back on him: 'Oh Clifton, that is not fair' or 'Your father is not a dog to be locked up'.",
+      "facts": [
+        "Wilson was a carpenter from age 16 until he retired at 63. Highly skilled with an excellent professional reputation. He loved his craft so much the house garage was turned into a workshop so he could keep building things for the home, family and friends.",
+        "The backyard was a produce garden so vegetables and fruit were available all year round. Cooking was Rosie's job because both of them prefer home cooked meals. Rosie loved creating recipes to showcase the produce, and making preserves and jams.",
+        "Wilson was mostly an outdoors person. On weekends he would work on projects outside until dark and only come in to eat.",
+        "A sound system was installed so country and western music could be played in the workshop and heard in the garden. He loves country and western music.",
+        "On rainy days, and most nights before bed, Wilson would read a chapter or two of a Robert Ludlum book. There are still four Robert Ludlum books on the bookcase he has not read.",
+        "Wilson and Rosie spent about 12 years travelling extensively in their caravan. Rosie guesses they went around Australia three times in total.",
+        "Large family: one boy (Clifton, the youngest) and three girls, all married. 12 grandchildren and 4 great grandchildren. Strong family ties, old fashioned values.",
+        "Dislikes: tardiness (people being late). Takeaway food, fatty food and foods high in sugar. Being idle with nothing to do.",
+        "Changed behaviour: Wilson would wander the neighbourhood. He would leave the house or yard in the evening while Rosie was inside cooking dinner. It could take her 10 to 20 minutes to notice he was gone, then longer to find him.",
+        "When found, Wilson would say he was looking for his wife Rosie, or looking for his Mother.",
+        "He could get defensive if Rosie tried to touch him or steer him back to the house. His voice could rise in anger if Rosie tried to reassure him that she was Rosie.",
+        "What did not work: the family eventually padlocked the front door and the garden gates so Wilson could not get out. This made him very distressed. He tried to pull the gates open with different tools, then searched for other ways out from inside the house.",
+        "What helped a little: at times Wilson seemed to enjoy his evening if Rosie was cooking a BBQ outside and the cooking happened outdoors with him.",
+        "In the end Rosie would pre-cook dinner earlier in the day so it only needed a few minutes to heat up, and she spent most evenings following Wilson around the house trying to calm him down.",
+        "The difficult time of day is the late afternoon and evening, roughly from 4pm to 7.30pm. Mornings are usually calm."
+      ],
+      "notKnown": [
+        "Rosie does not talk about Rugby League or TV. That is Clifton's topic.",
+        "Rosie never suggests locking Wilson in. She disagrees with Clifton about that."
+      ]
+    },
+    {
+      "id": "clifton",
+      "name": "Clifton",
+      "portrait": "man",
+      "relation": "Wilson's son",
+      "voice": "male",
+      "opening": "G'day. Clifton. I'm the youngest. Whatever helps Dad settle in, mate.",
+      "persona": "Clifton Blue is Wilson and Rosie's youngest child, in his late 40s. He works part time and lives locally, so he has spent a lot of time with his parents this past year. He is blunt, practical and a bit impatient. He loves his Dad but he is mostly worried about how exhausted his Mum has become. He thinks Rosie made life harder for herself by 'chasing Dad around' and believes the simple answer is to lock things up and put the football on. He is not cruel, he just does not understand dementia care, and he gets a little defensive if he feels judged. He speaks in short, casual Australian sentences and calls the student 'mate' now and then. He agrees with everything Rosie says about Wilson's likes and dislikes and often just adds a short comment.",
+      "facts": [
+        "Wilson is a keen Rugby League fan and likes to watch the games on TV. Clifton has a DVD of old football games and is happy to bring it in.",
+        "Wilson prefers structure, routines and following the rules. These were important in his work as well.",
+        "Wilson has no tolerance for cheeky or overly jokey people. He is a serious man with a mild sense of humour.",
+        "Clifton's view of the evenings: 'I told Mum to just lock the house up. There was no need for him to be able to get out the front. Keep the doors and gates padlocked and you would have been fine.'",
+        "Clifton's advice to staff (his key line, said once, clearly, when staff ask what worked or what they should do in the evenings): 'I never had an issue when I was there. The house was locked up. I would put an old football game on the TV and leave him to it. Did not worry me if he walked a hole in the hallway pacing. Just make sure staff lock him in his room about 5.30 and he will be fine. I can give you a DVD of old football games to keep him company.'",
+        "Clifton is mainly worried about all the extra stress on Rosie from doing what he sees as unnecessary things for Wilson."
+      ],
+      "notKnown": [
+        "Clifton does not know details about Wilson's reading, the caravan trips, or the recipes. He lets Rosie answer those and might add 'Mum knows all that better than me'."
+      ]
+    }
+  ],
+  "starterQuestions": ["Rosie, can you tell me a bit about what Wilson was like before he became unwell?", "What sort of things did Wilson enjoy doing at home?", "Can you tell me about a typical evening at home with Wilson?"],
+  "interactionRules": [
+    "Rosie does most of the talking. Clifton speaks up when the topic is sport, TV, routines, rules, or the evenings, or when he disagrees with Rosie.",
+    "The first time the student asks about evenings, wandering, or what the family tried at home, Rosie answers first and Clifton interrupts with his 'just lock the house up' view.",
+    "When the student asks what worked, what staff should do, or how to keep Wilson calm in the evenings, Clifton gives his key line about locking Wilson in his room at 5.30 and the football DVD. Say it once only. Rosie reacts with mild embarrassment or disagreement.",
+    "If the student responds to Clifton's suggestion with respect and explains gently that staff cannot lock a resident in, Clifton grumbles but accepts it: 'Fair enough, you are the experts. Just look after Mum's nerves too.' If the student argues or lectures him, he becomes defensive and short.",
+    "Sometimes only one of them answers. Two short turns at most per answer. Never more than about 100 words in total."
+  ],
+  "headings": ["Likes and interests", "Dislikes", "Changed behaviour", "What helped", "What did not help", "Concerns to report"],
+  "keyFacts": [
+    {"id": "carpenter", "label": "Carpenter for life, garage workshop", "heading": "Likes and interests"},
+    {"id": "garden", "label": "Produce garden, home cooked meals", "heading": "Likes and interests"},
+    {"id": "outdoors", "label": "Outdoors person, projects until dark", "heading": "Likes and interests"},
+    {"id": "music", "label": "Country and western music", "heading": "Likes and interests"},
+    {"id": "reading", "label": "Robert Ludlum books, reads before bed", "heading": "Likes and interests"},
+    {"id": "caravan", "label": "12 years caravan travel around Australia", "heading": "Likes and interests"},
+    {"id": "family", "label": "Large close family, old fashioned values", "heading": "Likes and interests"},
+    {"id": "rugby", "label": "Rugby League fan, watches games on TV", "heading": "Likes and interests"},
+    {"id": "routine", "label": "Likes structure, routines and rules", "heading": "Likes and interests"},
+    {"id": "tardiness", "label": "Dislikes lateness", "heading": "Dislikes"},
+    {"id": "food", "label": "Dislikes takeaway, fatty and sugary food", "heading": "Dislikes"},
+    {"id": "idle", "label": "Dislikes being idle", "heading": "Dislikes"},
+    {"id": "jokey", "label": "No tolerance for cheeky or jokey people", "heading": "Dislikes"},
+    {"id": "wander", "label": "Wanders in the evening while dinner is cooked", "heading": "Changed behaviour"},
+    {"id": "searching", "label": "Says he is looking for Rosie or his Mother", "heading": "Changed behaviour"},
+    {"id": "defensive", "label": "Defensive if touched or redirected, voice rises", "heading": "Changed behaviour"},
+    {"id": "timing", "label": "Distress mainly 4pm to 7.30pm", "heading": "Changed behaviour"},
+    {"id": "padlocks", "label": "Padlocked doors and gates made him very distressed", "heading": "What did not help"},
+    {"id": "reassure", "label": "Telling him she is Rosie made him angry", "heading": "What did not help"},
+    {"id": "bbq", "label": "Outdoor BBQ evenings helped", "heading": "What helped"},
+    {"id": "precook", "label": "Pre-cooking dinner, staying close to him", "heading": "What helped"},
+    {"id": "carerstress", "label": "Rosie is worn out from following him every evening", "heading": "Concerns to report"},
+    {"id": "lockin", "label": "Clifton wants staff to lock Wilson in his room from 5.30pm", "heading": "Concerns to report"}
+  ],
+  "teacher": {
+    "role": "The AI plays both Rosie and Clifton. You are free to sit as the supervisor. If you would rather play Clifton yourself, change 'Who plays Clifton' in Settings and use the cue lines below.",
+    "cues": [
+      "If asked about sport or TV (Clifton): 'Dad is a keen Rugby League fan. Loves watching the games on TV.'",
+      "If asked about routine or personality (Clifton): 'Dad likes structure, routines and following the rules. He has no time for cheeky or overly jokey people. Serious man, mild sense of humour.'",
+      "When Rosie talks about following him around in the evenings, Clifton interrupts: 'I told you to just lock the house up. Keep the doors and gates padlocked and you would have been fine.'",
+      "Clifton's key issue line, said once: 'I never had an issue when I was there. The house was locked up. I would put an old football game on the TV and leave him to it. Just make sure staff lock him in his room about 5.30 and he will be fine. I can give you a DVD of old football games.'",
+      "Watch how the student responds to the lock-in line. A good response validates Clifton's worry for his Mum, does not argue, and says they will pass it on to the supervisor.",
+      "If nobody has asked about the evenings after 15 minutes, prompt the class: 'What do we still not know about Wilson's afternoons and evenings?'"
+    ],
+    "debrief": [
+      "Which questions got the most information? Open or closed?",
+      "What did Clifton suggest? Why can staff not do that? (restrictive practice, duty of care, rights, dignity of risk, possible neglect, reporting)",
+      "How did the student who got the lock-in line respond? What would you have said?",
+      "What signs of carer stress did you hear from Rosie?",
+      "What would you write in the progress note? What is the key issue to report to the supervisor?",
+      "Using what you learned, what evening activity would suit Wilson between 4pm and 7.30pm?"
+    ]
+  }
+},
+{
+  "id": "val-theeson",
+  "title": "Val Theeson - Family Meeting",
+  "unit": "CHCAGE011 Provide support to people living with dementia",
+  "person": "Val",
+  "setting": "KAMA Community residential aged care service, memory support unit. Val moved in yesterday. It is 10.30am. Stuart has come in to visit and is happy to talk with staff so they can support Val well.",
+  "characters": [
+    {
+      "id": "stuart",
+      "name": "Stuart",
+      "portrait": "olderMan",
+      "relation": "Val's husband",
+      "voice": "male",
+      "opening": "Good morning. I am Stuart, Val's husband. They said you would like to know a bit more about Val. Fire away.",
+      "persona": "Stuart Theeson is a patient, gentle Australian man in his late 70s. He has been very happily married to Val for 49 years. He knows Val better than anyone and wants staff to support her well. He is quietly spoken, kind, and a little protective of Val. He is tired but does not complain. He speaks plainly and does not use clinical words unless the student uses them first.",
+      "facts": [
+        "Val and Stuart raised three daughters and two foster children. Daughters Barb (husband Greg), Lucinda (husband Mike) and Joy (husband Terry). Foster children Max and Brian. Mike and Greg have been very helpful and supportive.",
+        "Val has been dedicated to charity work and helping others for many years. She was a Lioness (female member of the Lions Club) and believed in supporting children in need.",
+        "One of Val's Lioness roles was fundraising: mini carnivals, formal dinners with guest speakers, charity auctions.",
+        "Since she was 32, Val has entered the home's front garden in the Carnival of Flowers in September each year. Her floral arrangements and knitting have won many awards at the Toowoomba Show.",
+        "Val is a demure lady. She dresses conservatively and is often described as a quiet person.",
+        "Dislikes: selfishness. Low tolerance to loud noise. Does not believe in having the TV constantly on (watch the news, then turn it off). Does not generally like music.",
+        "Changed behaviour: from about 4.30pm Val walks from room to room calling out for each of the children. She may go into the front yard yelling for the children to come home, sometimes hitting a kitchen pot with a spoon to get attention.",
+        "Val gets distressed because the children do not come when called.",
+        "Val takes pots and pans out and gathers food from the fridge to prepare a large family meal. The cooking is not safe or sensible, for example eggs in their shells on an oven tray with chicken, vegetables boiled in milk or pasta sauce.",
+        "Stove plates and the oven can be left on for long periods until Stuart notices. Taps get turned on to fill the bath for the children. Cold and frozen food gets left out.",
+        "Val sometimes asks Stuart where the children will sleep, because she can only find two beds.",
+        "What Stuart does: he is very patient, cleans up after her cooking, and checks the kitchen and bathroom regularly for taps and appliances left on.",
+        "What did not help: telling Val the children are grown up and not coming home. She does not understand and becomes very teary at the idea the children are lost. Some nights she cries herself to sleep.",
+        "What did not help: Stuart made a photo board of all the children at their current age with their families and shows it to her. It has not worked.",
+        "Concern (only if asked about worries, visitors, family, money, or anything staff should know): Lucinda says she will visit every day, but Stuart does not want her to spend unsupervised time with Val. Bank withdrawal slips with Val's signature were recently used to take cash from Val and Stuart's account, and Stuart is trying to work out how that happened. Stuart is uncomfortable saying this and only says it if asked gently."
+      ],
+      "notKnown": [
+        "Stuart does not volunteer the bank withdrawal concern. A student must ask about worries, visitors, or anything else staff should know."
+      ]
+    }
+  ],
+  "starterQuestions": ["Stuart, can you tell me a bit about what Val was like before she became unwell?", "What sort of things has Val always enjoyed?", "Can you tell me about a typical evening at home with Val?"],
+  "interactionRules": [],
+  "headings": ["Likes and interests", "Dislikes", "Changed behaviour", "What helped", "What did not help", "Concerns to report"],
+  "keyFacts": [
+    {"id": "family", "label": "Three daughters, two foster children", "heading": "Likes and interests"},
+    {"id": "lioness", "label": "Lioness, charity and fundraising", "heading": "Likes and interests"},
+    {"id": "flowers", "label": "Carnival of Flowers garden every September", "heading": "Likes and interests"},
+    {"id": "knitting", "label": "Award winning knitting and floral arrangements", "heading": "Likes and interests"},
+    {"id": "quiet", "label": "Quiet, demure, dresses conservatively", "heading": "Likes and interests"},
+    {"id": "noise", "label": "Dislikes loud noise, TV on all the time, music", "heading": "Dislikes"},
+    {"id": "selfish", "label": "Dislikes selfishness", "heading": "Dislikes"},
+    {"id": "calling", "label": "From 4.30pm calls out for the children", "heading": "Changed behaviour"},
+    {"id": "cooking", "label": "Unsafe cooking for a large family meal", "heading": "Changed behaviour"},
+    {"id": "stove", "label": "Stove, oven, taps left on", "heading": "Changed behaviour"},
+    {"id": "beds", "label": "Worries where the children will sleep", "heading": "Changed behaviour"},
+    {"id": "patient", "label": "Stuart stays calm, checks kitchen and bathroom", "heading": "What helped"},
+    {"id": "grownup", "label": "Telling her the children are grown up upsets her", "heading": "What did not help"},
+    {"id": "photoboard", "label": "Photo board of adult children did not work", "heading": "What did not help"},
+    {"id": "lucinda", "label": "Lucinda, unsupervised visits, bank withdrawals", "heading": "Concerns to report"}
+  ],
+  "teacher": {
+    "role": "There is only one family member in this case. You can sit in as the supervisor if you want to steer the conversation.",
+    "cues": [
+      "If nobody asks about concerns after 15 minutes, prompt the class: 'Is there anything else we should ask Stuart before he goes?'"
+    ],
+    "debrief": [
+      "Which questions opened Stuart up? Which closed him down?",
+      "What did Stuart tell us about Lucinda? What must staff do with that information? (privacy, abuse policy, report to supervisor, do not investigate yourself)",
+      "How would you validate Val when she is looking for her children, without telling her they are grown up?",
+      "What quiet, low noise evening activity would suit Val between 4pm and 7.30pm?"
+    ]
+  }
+}
+];
+
+</script>
+<script>
+(function(){
+"use strict";
+const $ = id => document.getElementById(id);
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem('fm_'+k); return v===null? d : JSON.parse(v);}catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem('fm_'+k, JSON.stringify(v)); }catch(e){} }
+};
+
+// ---------- State ----------
+let scenarios = [];            // builtin + custom
+let S = null;                  // active scenario (normalised)
+let history = [];              // [{role:'user'|'assistant', content}]
+let board = {};                // heading -> [points]
+let revealed = new Set();      // key fact ids
+let qCount = 0;
+let lastTurns = [];            // [{speaker, text}]
+let whisperText = '';
+let busy = false;
+let student = null;            // {n, q, types:[], facts, lifeline, coach}
+let lastSuggested = '';        // suggested next question from the last answer (lifeline)
+const cfg = {
+  perStudent: ()=> parseInt(LS.get('perStudent', 3)),
+  coachOn: ()=> LS.get('coachOn', true),
+  lifelineOn: ()=> LS.get('lifelineOn', true)
+};
+function newStudent(n){ return {n:n, q:0, types:[], facts:0, lifeline:false}; }
+
+function normalise(sc){
+  // Accept old single-character files as well as the new "characters" list.
+  const s = Object.assign({}, sc);
+  if(!s.characters && s.character){
+    s.characters = [Object.assign({ id: (s.character.name||'a').toLowerCase(), opening: s.openingLine, persona: s.persona, facts: s.facts||[], notKnown: s.notKnown||[] }, s.character)];
+  }
+  s.characters = (s.characters||[]).map((c,i)=> Object.assign({ id: c.id || ('c'+i), facts:[], notKnown:[], voice:'female' }, c));
+  s.interactionRules = s.interactionRules || [];
+  s.headings = s.headings || ["Likes and interests","Dislikes","Changed behaviour","What helped","What did not help","Concerns to report"];
+  return s;
+}
+function loadScenarios(){
+  const custom = LS.get('customScenarios', []);
+  scenarios = [...(window.BUILTIN_SCENARIOS||[]), ...custom].map(normalise);
+}
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2800); }
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// Who is played by the AI (teacher may take over any character except the first)
+function teacherPlays(){ return LS.get('teacherPlays_'+S.id, []); }
+function aiCharacters(){ const tp = teacherPlays(); return S.characters.filter(c=>!tp.includes(c.id)); }
+function charByName(name){ const n = String(name||'').toLowerCase(); return S.characters.find(c=>c.name.toLowerCase()===n) || S.characters.find(c=>n.includes(c.name.toLowerCase())) || null; }
+
+// ---------- Scenario / UI setup ----------
+function applyScenario(id){
+  S = scenarios.find(s=>s.id===id) || scenarios[0];
+  LS.set('scenarioId', S.id);
+  $('hTitle').textContent = S.title;
+  $('hUnit').textContent = S.unit || '';
+  $('personName').textContent = S.person;
+  renderPersona();
+  const names = aiCharacters().map(c=>c.name);
+  const who = names.length>1? names.slice(0,-1).join(', ')+' and '+names[names.length-1] : (names[0]||'the family');
+  document.querySelectorAll('.tCharName').forEach(e=>e.textContent=who);
+  $('question').placeholder = 'Your question for '+who+' appears here. You can also type it, then press Send.';
+  $('tRole').textContent = (S.teacher&&S.teacher.role)||'';
+  $('tCues').innerHTML = ((S.teacher&&S.teacher.cues)||[]).map(c=>'<li>'+esc(c)+'</li>').join('');
+  $('tDebrief').innerHTML = ((S.teacher&&S.teacher.debrief)||[]).map(c=>'<li>'+esc(c)+'</li>').join('');
+  restoreSession();
+  renderBoard();
+}
+function picKey(sc, c){ return 'pic_'+sc.id+'_'+c.id; }
+function portraitHTML(sc, c){
+  const custom = LS.get(picKey(sc,c), '');
+  if(custom) return '<img src="'+custom+'" alt="">';
+  const P = window.PORTRAITS||{};
+  const kind = c.portrait || (c.voice==='male' ? 'olderMan' : 'olderWoman');
+  return P[kind] || P.olderWoman || '';
+}
+function renderPersona(){
+  const tp = teacherPlays();
+  const n = S.characters.length;
+  const t = $('tiles');
+  t.style.gridTemplateColumns = 'repeat('+Math.min(n,3)+', 1fr)';
+  t.innerHTML = S.characters.map(c=>'<div class="tile'+(tp.includes(c.id)?' teacher':'')+'" data-id="'+esc(c.id)+'"><div class="pic">'+portraitHTML(S,c)+'</div><div class="name"><span class="mic">&#127908;</span><b>'+esc(c.name)+'</b><small>'+esc(c.relation)+'</small></div></div>').join('');
+}
+function setSpeaking(name){
+  document.querySelectorAll('.tile').forEach(p=>p.classList.remove('speaking'));
+  const c = charByName(name); if(!c) return;
+  const el = document.querySelector('.tile[data-id="'+c.id+'"]'); if(el) el.classList.add('speaking');
+}
+
+// ---------- Student turns and coaching ----------
+function renderTurn(){
+  if(!student) student = newStudent(1);
+  const per = cfg.perStudent();
+  $('studentLabel').textContent = 'Student '+student.n+(student.q>=per? ' · turn finished, press Next student' : ' · question '+(student.q+1)+' of '+per);
+  const dots = []; for(let i=0;i<per;i++){ const ty = student.types[i]; dots.push('<i class="'+(ty? 'done '+(ty==='open'?'open':ty==='closed'?'closed':'') : '')+'" title="'+(ty||'')+'"></i>'); }
+  $('dots').innerHTML = dots.join('');
+  const ll = $('btnLifeline'); ll.classList.toggle('hidden', !cfg.lifelineOn()); ll.disabled = !!student.lifeline || !history.length;
+  ll.textContent = student.lifeline ? 'Lifeline used' : 'Lifeline: show me a question';
+  $('btnNext').classList.toggle('primary', student.q>=per); $('btnNext').classList.toggle('ghost', student.q<per);
+  renderExplore();
+}
+function renderExplore(){
+  const empty = S.headings.filter(h=>!(board[h]||[]).length);
+  $('explore').innerHTML = empty.length? 'Still to explore: '+empty.map(h=>'<span>'+esc(h)+'</span>').join('') : 'Every area has something on the board. Now go deeper: ask follow-up questions.';
+}
+function showCoach(html, summary){
+  const c = $('coach'); if(!html){ c.classList.add('hidden'); return; }
+  c.innerHTML = html; c.classList.toggle('summary', !!summary); c.classList.remove('hidden');
+}
+function turnSummary(){
+  const open = student.types.filter(t=>t==='open').length, closed = student.types.filter(t=>t==='closed').length, other = student.types.length-open-closed;
+  const parts = [];
+  parts.push('<b>Student '+student.n+', turn finished.</b> '+student.types.length+' question'+(student.types.length===1?'':'s')+': '+open+' open, '+closed+' closed'+(other? ', '+other+' other':'')+'.');
+  parts.push('New facts uncovered: <b>'+student.facts+'</b>.');
+  if(open===student.types.length && student.facts>=3) parts.push('Excellent interviewing: every question was open and the family opened up.');
+  else if(student.facts>=3) parts.push('Good digging. The family told you a lot.');
+  else if(open===0) parts.push('Next time try starting with "Tell me about..." or "How did...". Open questions bring out stories.');
+  else parts.push('Try a follow-up on something they said. That is where the detail is.');
+  if(student.lifeline) parts.push('(Lifeline used.)');
+  return parts.join(' ');
+}
+function nextStudent(){
+  const n = student? student.n+1 : 1;
+  student = newStudent(n); lastSuggested = lastSuggested; showCoach(''); $('qType').classList.add('hidden');
+  renderTurn(); saveSession(); toast('Student '+n+', your turn. Ask your first question.');
+}
+function useLifeline(){
+  if(!student || student.lifeline || !cfg.lifelineOn()) return;
+  const q = lastSuggested || ((S.starterQuestions||[])[Math.floor(Math.random()*(S.starterQuestions||[]).length)]) || 'Can you tell me more about what a normal day looked like at home?';
+  student.lifeline = true;
+  showCoach('<b>Lifeline.</b> You could ask: <i>"'+esc(q)+'"</i> Put it in your own words.');
+  $('question').value = ''; $('question').placeholder = q;
+  renderTurn(); saveSession();
+}
+
+function blankSession(){
+  history = []; board = {}; revealed = new Set(); qCount = 0; lastTurns=[]; whisperText=''; student = newStudent(1); lastSuggested='';
+  S.headings.forEach(h=>board[h]=[]);
+  $('log').innerHTML=''; $('qType').classList.add('hidden'); showCoach(''); renderTurn();
+  showTurns([{speaker:'', text: LS.get('apiKey','')? 'Press Start meeting when the class is ready.' : 'Press Settings to add your key, then press Start meeting.'}]);
+}
+function saveSession(){
+  LS.set('session_'+S.id, {history, board, revealed:[...revealed], qCount, lastTurns, student, lastSuggested, log: $('log').innerHTML});
+}
+function restoreSession(){
+  const s = LS.get('session_'+S.id, null);
+  blankSession();
+  if(s && s.history && s.history.length){
+    history = s.history; board = Object.assign(board, s.board||{}); revealed = new Set(s.revealed||[]); qCount = s.qCount||0; lastTurns = s.lastTurns||[]; student = s.student||newStudent(1); lastSuggested = s.lastSuggested||'';
+    $('log').innerHTML = s.log||''; renderTurn();
+    showTurns(lastTurns.length? lastTurns : [{speaker:'', text:'Meeting in progress. Ask the next question.'}]);
+  }
+}
+
+function renderBoard(){
+  const b = $('board'); b.innerHTML='';
+  S.headings.forEach(h=>{
+    const col = document.createElement('div'); col.className='col'+(/concern/i.test(h)?' concern':'');
+    col.innerHTML = '<h3>'+esc(h)+'</h3><ul>'+(board[h]||[]).map(p=>'<li>'+esc(p)+'</li>').join('')+'</ul>';
+    b.appendChild(col);
+  });
+  const total = (S.keyFacts||[]).length, got = [...revealed].filter(id=>(S.keyFacts||[]).some(f=>f.id===id)).length;
+  $('progress').textContent = total? got+' of '+total+' key facts uncovered' : '';
+  $('barFill').style.width = total? Math.round(100*got/total)+'%' : '0%';
+  if($('explore')) renderExplore();
+  $('tFacts').innerHTML = (S.keyFacts||[]).map(f=>'<li class="'+(revealed.has(f.id)?'done':'')+'">'+esc(f.label)+' <span style="color:var(--muted)">('+esc(f.heading)+')</span></li>').join('');
+}
+function addToBoard(items){
+  const added = [];
+  (items||[]).forEach(it=>{
+    if(!it || !it.heading || !it.point) return;
+    const want = String(it.heading).toLowerCase();
+    const h = S.headings.find(x=>x.toLowerCase()===want) || S.headings.find(x=>x.toLowerCase().includes(want.split(' ')[0]));
+    if(!h) return;
+    const p = String(it.point).trim().replace(/\.$/,'');
+    if(!p) return;
+    const norm = p.toLowerCase();
+    if((board[h]||[]).some(x=>x.toLowerCase()===norm || x.toLowerCase().includes(norm) || norm.includes(x.toLowerCase()))) return;
+    board[h].push(p); added.push(h+'|'+p);
+  });
+  renderBoard();
+  added.forEach(key=>{
+    const [h,p] = key.split('|');
+    document.querySelectorAll('.col').forEach(col=>{
+      if(col.querySelector('h3').textContent===h){ col.querySelectorAll('li').forEach(li=>{ if(li.textContent===p) li.classList.add('new'); }); }
+    });
+  });
+  setTimeout(()=>document.querySelectorAll('li.new').forEach(li=>li.classList.remove('new')), 6000);
+}
+
+function showTurns(turns, thinking){
+  const a = $('answer'); a.classList.toggle('thinking', !!thinking);
+  a.innerHTML = turns.map(t=>{
+    const c = charByName(t.speaker);
+    return '<div class="turn '+(c&&c.voice==='male'?'male':'')+'">'+(t.speaker? '<div class="who">'+esc(t.speaker)+'</div>':'')+'<div>'+esc(t.text)+'</div></div>';
+  }).join('');
+}
+function logLine(q, turns){
+  const d = document.createElement('div');
+  d.innerHTML = '<b>S'+(student?student.n:'')+' Q'+qCount+':</b> '+esc(q)+' '+turns.map(t=>'<br><b>'+esc(t.speaker)+':</b> '+esc(t.text)).join('');
+  $('log').prepend(d);
+}
+
+// ---------- Prompt ----------
+function systemPrompt(){
+  const cast = aiCharacters();
+  const tp = teacherPlays();
+  const teacherChars = S.characters.filter(c=>tp.includes(c.id));
+  const names = cast.map(c=>c.name);
+  const lines = [];
+  lines.push(`You are voicing ${names.length>1? 'the family members '+names.join(' and ') : names[0]} in a training session for aged care students in Australia. The students are support workers practising how to talk with a person's family to learn about someone living with dementia. The student is not acting; they are doing their normal job. You stay fully in character at all times.`);
+  lines.push(`SETTING: ${S.setting}`);
+  cast.forEach(c=>{
+    lines.push(`=== ${c.name.toUpperCase()} (${c.relation}) ===\nWHO ${c.name.toUpperCase()} IS: ${c.persona}\nWHAT ${c.name.toUpperCase()} KNOWS (share only what is asked about, as memories and stories, never as a list):\n${c.facts.map((f,i)=>(i+1)+'. '+f).join('\n')}\nWHAT ${c.name.toUpperCase()} DOES NOT RAISE OR DOES NOT KNOW:\n${(c.notKnown||[]).map(f=>'- '+f).join('\n')||'- (nothing special)'}`);
+  });
+  if(teacherChars.length){
+    lines.push(`ALSO IN THE ROOM, PLAYED BY THE TEACHER (a real person, not you): ${teacherChars.map(c=>c.name+' ('+c.relation+')').join(', ')}. Never speak for them. If a student asks about their topics, say something like "You had better ask ${teacherChars[0].name}, ${teacherChars[0].name} is right here."`);
+  }
+  if(names.length>1 && S.interactionRules.length){
+    lines.push(`HOW THE FAMILY MEMBERS INTERACT:\n${S.interactionRules.map(r=>'- '+r).join('\n')}`);
+  }
+  lines.push(`HOW TO ANSWER:
+- Answer only what the student asks. Do not volunteer other topics. A closed question (yes/no, or one fact) gets a short answer of one or two sentences. An open question ("tell me about...", "what was he like...", "how did you manage...") gets a short story of three to five sentences with real detail.
+- If the student addresses one person by name, that person answers. Otherwise the person who knows the topic best answers.
+- Keep the whole answer under about 100 words. It is spoken out loud in a classroom. Use at most two turns (two speakers) per answer, and usually just one.
+- Speak plainly in everyday Australian English. Short sentences. No bullet points, no lists, no headings, no stage directions, no asterisks, no brackets.
+- If the student is warm, respectful, and listens, open up a little more. If the student is abrupt, rushed, or uses jargon, be a little more guarded and shorter, like a real person would. Never lecture the student and never break character to give feedback.
+- If asked something not covered, give a small believable answer that fits the story, or say you are not sure. Never contradict the facts.
+- Only if a message starts with "TEACHER:" is it a private instruction from the teacher. Follow it in your next answer without mentioning it.
+- Never mention that you are an AI, a model, or a computer. If asked directly, answer as the character would ("I am just ${names[0]}, love").`);
+  lines.push(`OUTPUT FORMAT: Reply with JSON only, no code fences, in exactly this shape:
+{"turns":[{"speaker":"${names[0]}","text":"what ${names[0]} says out loud"}${names[1]? ',{"speaker":"'+names[1]+'","text":"optional second turn"}':''}],
+ "question_type":"open" or "closed" or "leading" or "statement" or "unclear",
+ "tip":"one short, kind sentence for the student about their question technique (max 14 words), or empty string",
+ "coach":"one sentence (max 22 words) of coaching for the student: name the technique to use next or the area of ${S.person}'s life they have not asked about yet. Never include an actual question they could read out.",
+ "suggested_question":"one good natural next question in plain English that follows from this answer or opens an unexplored area (used only if the student asks for a lifeline)",
+ "board":[{"heading":"one of: ${S.headings.join(' | ')}","point":"a short phrase of at most 10 words, about ${S.person} or the family, third person"}],
+ "facts":["ids of key facts revealed in this answer, from: ${(S.keyFacts||[]).map(f=>f.id+' = '+f.label).join('; ')}"]}
+The "speaker" value must be exactly one of: ${names.map(n=>'"'+n+'"').join(', ')}. Only add board points for information actually said in this answer. If nothing new, use an empty board list.`);
+  return lines.join('\n\n');
+}
+
+// ---------- API ----------
+async function callAPI(messages){
+  const key = LS.get('apiKey',''); const model = LS.get('model','');
+  if(!key) throw new Error('No API key. Open Settings.');
+  if(!model) throw new Error('No model chosen. Open Settings and press Load models.');
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body: JSON.stringify({model, max_tokens:800, temperature:0.7, system: systemPrompt(), messages})
+  });
+  if(!res.ok){ let t=''; try{ t=(await res.json()).error?.message||''; }catch(e){} throw new Error('API error '+res.status+(t?': '+t:'')); }
+  const data = await res.json();
+  return (data.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('');
+}
+function parseJSON(text){
+  let t = text.trim().replace(/^```(json)?/i,'').replace(/```$/,'').trim();
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if(a>=0 && b>a) t = t.slice(a,b+1);
+  let j;
+  try{ j = JSON.parse(t); }catch(e){ j = {reply: text.replace(/[{}"\[\]]/g,'').slice(0,400)}; }
+  const first = aiCharacters()[0] || S.characters[0];
+  let turns = Array.isArray(j.turns)? j.turns.filter(x=>x && x.text).map(x=>({speaker: (charByName(x.speaker)||first).name, text:String(x.text).trim()})) : [];
+  if(!turns.length && j.reply) turns = [{speaker:first.name, text:String(j.reply).trim()}];
+  if(!turns.length) turns = [{speaker:first.name, text:'...'}];
+  return {turns, question_type: j.question_type||'', tip: j.tip||'', coach: j.coach||'', suggested: j.suggested_question||'', board: j.board||[], facts: j.facts||[]};
+}
+
+async function ask(text, opts){
+  opts = opts||{};
+  if(busy) return;
+  text = (text||'').trim(); if(!text) return;
+  busy = true; $('btnSend').disabled=true; $('btnMic').disabled=true;
+  stopSpeaking();
+  const userContent = (whisperText? 'TEACHER: '+whisperText+'\n\nSTUDENT: '+text : text);
+  whisperText='';
+  if(!opts.silent){ qCount++; }
+  showTurns([{speaker:'', text:'Thinking...'}], true); setSpeaking(''); showCoach('');
+  try{
+    const msgs = [...history, {role:'user', content:userContent}];
+    const raw = await callAPI(msgs);
+    const j = parseJSON(raw);
+    history = [...msgs, {role:'assistant', content: raw}];
+    if(history.length>40) history = history.slice(history.length-40);
+    lastTurns = j.turns; showTurns(j.turns, false);
+    speakTurns(j.turns);
+    addToBoard(j.board);
+    const before = revealed.size; (j.facts||[]).forEach(id=>revealed.add(id)); renderBoard();
+    const newFacts = revealed.size - before;
+    if(j.suggested) lastSuggested = j.suggested;
+    if(!opts.silent){
+      if(!student) student = newStudent(1);
+      const qt = (j.question_type||'').toLowerCase();
+      student.q++; student.types.push(qt||'other'); student.facts += newFacts;
+      logLine(text, j.turns);
+      const badge = $('qType'); badge.className='badge '+(qt==='open'?'open':qt==='closed'?'closed':''); badge.textContent = qt? ({open:'Open question',closed:'Closed question',leading:'Leading question',statement:'Statement',unclear:'Unclear question'}[qt]||qt) : ''; badge.classList.toggle('hidden', !qt);
+      const per = cfg.perStudent();
+      if(student.q>=per){ showCoach(turnSummary(), true); }
+      else if(cfg.coachOn()){ const line = (j.tip? j.tip+' ' : '') + (j.coach||''); showCoach(line? '<b>Coach:</b> '+esc(line) : ''); }
+      renderTurn();
+    }
+    $('question').value=''; $('heard').textContent='';
+    saveSession();
+  }catch(err){
+    showTurns([{speaker:'', text:'Something went wrong: '+err.message}], true); toast(err.message);
+    if(!opts.silent){ qCount--; }
+  }finally{
+    busy=false; $('btnSend').disabled=false; $('btnMic').disabled=false;
+  }
+}
+
+// ---------- Speech out ----------
+let voices = [];
+function refreshVoices(){ voices = (window.speechSynthesis? speechSynthesis.getVoices() : []) || []; }
+function voiceKey(c){ return 'voice_'+S.id+'_'+c.id; }
+function pickVoice(c){
+  const want = LS.get(voiceKey(c),'');
+  if(want){ const v = voices.find(v=>v.name===want); if(v) return v; }
+  const gender = (c.voice||'female');
+  const fem = /natasha|catherine|female|karen|hayley|zira|jenny|libby|sonia|mia|aria|samantha|kate|annie|clara/i, mal = /william|james|male|daniel|ryan|guy|thomas|george|neil|richard|mark|david|liam/i;
+  const byName = list => list.find(v=> gender==='female' ? (fem.test(v.name) && !mal.test(v.name)) : (mal.test(v.name) && !fem.test(v.name)));
+  const au = voices.filter(v=>/en[-_]AU/i.test(v.lang));
+  return byName(au) || byName(voices.filter(v=>/^en/i.test(v.lang))) || au[0] || voices.find(v=>/^en/i.test(v.lang)) || voices[0] || null;
+}
+function speakTurns(turns){
+  if(!window.speechSynthesis || !LS.get('speakOn', true)) return;
+  stopSpeaking();
+  turns.forEach(t=>{
+    const c = charByName(t.speaker); if(!c) return;
+    const u = new SpeechSynthesisUtterance(t.text);
+    const v = pickVoice(c); if(v) u.voice = v;
+    u.rate = parseFloat(LS.get('rate', 0.95)); u.pitch = 1; u.lang = (v&&v.lang)||'en-AU';
+    u.onstart = ()=>setSpeaking(t.speaker);
+    u.onend = ()=>setSpeaking('');
+    speechSynthesis.speak(u);
+  });
+}
+function stopSpeaking(){ try{ speechSynthesis.cancel(); }catch(e){} setSpeaking(''); }
+
+// ---------- Speech in ----------
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, listening = false, finalText = '';
+let micStream = null; // kept open for the whole session so the browser asks for permission only once
+async function holdMicrophone(){
+  if(micStream && micStream.active) return true;
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return true;
+  try{ micStream = await navigator.mediaDevices.getUserMedia({audio:true}); return true; }
+  catch(e){ toast('Microphone blocked. Allow the microphone in the browser address bar, then try again.'); return false; }
+}
+async function startListening(){
+  if(!SR){ toast('This browser has no speech recognition. Use Chrome or Edge, or type the question.'); return; }
+  if(listening) return;
+  stopSpeaking();
+  if(!(await holdMicrophone())) return;
+  rec = new SR(); rec.lang = LS.get('lang','en-AU'); rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 1;
+  finalText = $('question').value ? $('question').value.trim()+' ' : '';
+  rec.onresult = e=>{
+    let interim='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const r=e.results[i]; if(r.isFinal) finalText += r[0].transcript.trim()+' '; else interim += r[0].transcript;
+    }
+    $('question').value = (finalText+interim).replace(/\s+/g,' ').trim();
+    $('heard').textContent = interim? 'Hearing: '+interim : '';
+  };
+  rec.onerror = e=>{ listening=false; setMicUI(); const m = {'not-allowed':'Microphone blocked. Allow the microphone in the browser address bar.','no-speech':'No speech heard. Try again and speak a little louder.','network':'Speech service needs the internet.','audio-capture':'No microphone found.'}[e.error]||('Microphone error: '+e.error); toast(m); };
+  rec.onend = ()=>{ listening=false; setMicUI(); $('heard').textContent = $('question').value? 'Check the words, then press Send.' : ''; };
+  try{ rec.start(); listening=true; setMicUI(); $('heard').textContent='Listening... speak now.'; }catch(e){ toast('Could not start the microphone.'); }
+}
+function stopListening(){ if(rec && listening){ try{ rec.stop(); }catch(e){} } }
+function setMicUI(){ $('btnMic').classList.toggle('listening', listening); $('micLabel').textContent = listening? 'Listening... click to stop' : 'Ask a question'; }
+
+// ---------- Export ----------
+function boardHTML(){
+  const rows = S.headings.map(h=>'<h3>'+esc(h)+'</h3><ul>'+(board[h]||[]).map(p=>'<li>'+esc(p)+'</li>').join('')+'</ul>').join('');
+  const transcript = [...$('log').querySelectorAll('div')].reverse().map(d=>'<p>'+d.innerHTML+'</p>').join('');
+  const who = S.characters.map(c=>c.name+' ('+c.relation+')').join(' and ');
+  return '<html><head><meta charset="utf-8"><title>'+esc(S.title)+'</title><style>body{font-family:Calibri,Arial,sans-serif;font-size:12pt}h1{font-size:18pt}h2{font-size:14pt;margin-top:18pt}h3{font-size:12pt;color:#1b7f79;margin-bottom:2pt}ul{margin-top:0}</style></head><body>'+
+    '<h1>'+esc(S.title)+'</h1><p>'+esc(S.unit||'')+'<br>Class information session with '+esc(who)+'. Date: '+new Date().toLocaleDateString('en-AU')+'</p>'+
+    '<h2>What we learned about '+esc(S.person)+'</h2>'+rows+
+    '<h2>Questions asked and answers given</h2>'+transcript+'</body></html>';
+}
+function download(name, content, type){
+  const blob = new Blob([content], {type}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},500);
+}
+
+// ---------- Models ----------
+async function loadModels(){
+  const key = $('apiKey').value.trim(); if(!key){ toast('Paste your API key first.'); return; }
+  try{
+    const res = await fetch('https://api.anthropic.com/v1/models?limit=100',{headers:{'x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}});
+    if(!res.ok) throw new Error('Could not load models ('+res.status+'). Check the key.');
+    const data = await res.json(); const list = (data.data||[]).map(m=>m.id);
+    if(!list.length) throw new Error('No models returned.');
+    const cur = LS.get('model','') || list.find(m=>/sonnet/i.test(m)) || list[0];
+    $('model').innerHTML = list.map(m=>'<option value="'+esc(m)+'" '+(m===cur?'selected':'')+'>'+esc(m)+'</option>').join('');
+    toast('Key works. '+list.length+' models loaded.');
+  }catch(e){ toast(e.message); }
+}
+
+// ---------- Settings UI ----------
+let settingsScenario = null; // scenario shown in the settings panel (may differ from S until saved)
+function renderPicRows(sc){
+  $('picRows').innerHTML = sc.characters.map(c=>{
+    const has = !!LS.get(picKey(sc,c),'');
+    return '<div class="row" style="margin-bottom:6px"><span style="flex:0 0 160px">'+esc(c.name)+'</span><div style="flex:0 0 56px;height:56px;border-radius:10px;overflow:hidden;border:2px solid var(--line)"><div class="pic" style="width:56px;height:56px">'+portraitHTML(sc,c)+'</div></div><label class="ghost" style="text-align:center;padding:.5em 1em;border:2px solid var(--line);border-radius:12px;cursor:pointer;flex:0">Load picture<input type="file" accept="image/*" data-pic="'+esc(c.id)+'" style="display:none"></label><button data-picreset="'+esc(c.id)+'" style="flex:0" '+(has?'':'disabled')+'>Use drawn portrait</button></div>';
+  }).join('');
+  document.querySelectorAll('input[data-pic]').forEach(inp=> inp.onchange = e=>{
+    const f = e.target.files[0]; if(!f) return; const c = sc.characters.find(x=>x.id===inp.dataset.pic);
+    const img = new Image(); const url = URL.createObjectURL(f);
+    img.onload = ()=>{
+      const size = 360, cv = document.createElement('canvas'); cv.width=size; cv.height=Math.round(size*0.75);
+      const ctx = cv.getContext('2d'); const s = Math.max(cv.width/img.width, cv.height/img.height);
+      const w = img.width*s, h = img.height*s; ctx.drawImage(img, (cv.width-w)/2, (cv.height-h)/2, w, h);
+      LS.set(picKey(sc,c), cv.toDataURL('image/jpeg', 0.85)); URL.revokeObjectURL(url); renderPicRows(sc); if(sc.id===S.id) renderPersona(); toast('Picture loaded for '+c.name+'.');
+    };
+    img.onerror = ()=> toast('Could not read that image.'); img.src = url; e.target.value='';
+  });
+  document.querySelectorAll('button[data-picreset]').forEach(b=> b.onclick = ()=>{ const c = sc.characters.find(x=>x.id===b.dataset.picreset); try{ localStorage.removeItem('fm_'+picKey(sc,c)); }catch(e){} renderPicRows(sc); if(sc.id===S.id) renderPersona(); });
+}
+function renderCastAndVoices(sc){
+  settingsScenario = sc;
+  refreshVoices();
+  renderPicRows(sc);
+  const tp = LS.get('teacherPlays_'+sc.id, []);
+  $('castRows').innerHTML = sc.characters.map((c,i)=>'<div class="row" style="margin-bottom:6px"><span style="flex:0 0 160px">'+esc(c.name)+' ('+esc(c.relation)+')</span><select data-cast="'+esc(c.id)+'" '+(i===0?'disabled':'')+'><option value="ai" '+(!tp.includes(c.id)?'selected':'')+'>The AI</option><option value="teacher" '+(tp.includes(c.id)?'selected':'')+'>Me (teacher)</option></select></div>').join('');
+  $('castField').classList.toggle('hidden', sc.characters.length<2);
+  const opts = voices.map(v=>'<option value="'+esc(v.name)+'">'+esc(v.name)+' ('+esc(v.lang)+')</option>').join('');
+  $('voiceRows').innerHTML = sc.characters.map(c=>{
+    const cur = LS.get('voice_'+sc.id+'_'+c.id,'');
+    const auto = pickVoiceFor(sc, c);
+    return '<div class="row" style="margin-bottom:6px"><span style="flex:0 0 160px">'+esc(c.name)+'</span><select data-voice="'+esc(c.id)+'"><option value="">(Automatic'+(auto? ': '+esc(auto.name):'')+')</option>'+opts+'</select><button data-test="'+esc(c.id)+'" style="flex:0">Test</button></div>';
+  }).join('');
+  sc.characters.forEach(c=>{ const sel = document.querySelector('select[data-voice="'+c.id+'"]'); if(sel) sel.value = LS.get('voice_'+sc.id+'_'+c.id,''); });
+  document.querySelectorAll('button[data-test]').forEach(b=> b.onclick = ()=>{
+    const c = sc.characters.find(x=>x.id===b.dataset.test); const sel = document.querySelector('select[data-voice="'+c.id+'"]');
+    LS.set('voice_'+sc.id+'_'+c.id, sel.value); LS.set('rate', parseFloat($('rate').value));
+    const saveS = S; S = sc; stopSpeaking();
+    const u = new SpeechSynthesisUtterance((c.opening||('Hello, I am '+c.name+'.')).slice(0,140)); const v = pickVoice(c); if(v) u.voice=v; u.rate = parseFloat($('rate').value); speechSynthesis.speak(u);
+    S = saveS;
+  });
+}
+function pickVoiceFor(sc, c){ const saveS = S; S = sc; const v = pickVoice(c); S = saveS; return v; }
+function openSettings(){
+  $('apiKey').value = LS.get('apiKey','');
+  const m = LS.get('model',''); if(m){ $('model').innerHTML='<option value="'+esc(m)+'" selected>'+esc(m)+'</option>'; }
+  $('scenario').innerHTML = scenarios.map(s=>'<option value="'+esc(s.id)+'" '+(s.id===S.id?'selected':'')+'>'+esc(s.title)+'</option>').join('');
+  renderCastAndVoices(S);
+  $('scenario').onchange = ()=> renderCastAndVoices(scenarios.find(s=>s.id===$('scenario').value)||S);
+  $('speakOn').checked = LS.get('speakOn',true); $('rate').value = LS.get('rate',0.95); $('lang').value = LS.get('lang','en-AU');
+  $('perStudent').value = String(cfg.perStudent()); $('coachOn').checked = cfg.coachOn(); $('lifelineOn').checked = cfg.lifelineOn();
+  $('browserNote').innerHTML = (SR? 'Microphone input is available in this browser.' : 'This browser cannot do speech recognition. Open this file in <b>Google Chrome</b> or <b>Microsoft Edge</b>.') + (voices.length? ' '+voices.length+' voices found.' : ' No voices found yet, close and reopen Settings.');
+  $('settings').classList.remove('hidden');
+}
+function saveSettings(){
+  LS.set('apiKey', $('apiKey').value.trim());
+  LS.set('model', $('model').value);
+  LS.set('speakOn', $('speakOn').checked); LS.set('rate', parseFloat($('rate').value)); LS.set('lang', $('lang').value);
+  LS.set('perStudent', parseInt($('perStudent').value)); LS.set('coachOn', $('coachOn').checked); LS.set('lifelineOn', $('lifelineOn').checked);
+  const sc = settingsScenario || S;
+  const tp = [...document.querySelectorAll('select[data-cast]')].filter(s=>s.value==='teacher').map(s=>s.dataset.cast);
+  const tpOld = LS.get('teacherPlays_'+sc.id, []);
+  LS.set('teacherPlays_'+sc.id, tp);
+  document.querySelectorAll('select[data-voice]').forEach(s=> LS.set('voice_'+sc.id+'_'+s.dataset.voice, s.value));
+  const sid = $('scenario').value;
+  if(sid!==S.id){ applyScenario(sid); }
+  else { applyScenario(S.id); if(JSON.stringify(tp)!==JSON.stringify(tpOld) && history.length) toast('Cast changed. Press Reset before the next meeting so the family knows who is in the room.'); }
+  $('settings').classList.add('hidden'); updateStatus();
+}
+function updateStatus(){
+  const ok = !!LS.get('apiKey','') && !!LS.get('model','');
+  $('dotKey').className = 'dot '+(ok?'ok':'bad'); $('statusText').textContent = ok? 'Ready ('+LS.get('model','')+')' : 'Not set up yet: open Settings';
+}
+
+// ---------- Wire up ----------
+function init(){
+  loadScenarios();
+  applyScenario(LS.get('scenarioId', scenarios[0].id));
+  updateStatus();
+  if(window.speechSynthesis){ refreshVoices(); speechSynthesis.onvoiceschanged = refreshVoices; }
+
+  $('btnSettings').onclick = openSettings;
+  $('btnSettingsSave').onclick = saveSettings;
+  $('btnModels').onclick = loadModels;
+  $('btnHelp').onclick = ()=>$('help').classList.remove('hidden');
+  $('btnHelpClose').onclick = ()=>$('help').classList.add('hidden');
+  $('btnScenarioExport').onclick = ()=> download(S.id+'.json', JSON.stringify(S,null,2), 'application/json');
+  $('scenarioFile').onchange = e=>{
+    const f = e.target.files[0]; if(!f) return;
+    const r = new FileReader(); r.onload = ()=>{
+      try{
+        const sc = JSON.parse(r.result);
+        if(!sc.id||!sc.title||!(sc.characters||sc.character)||!sc.headings) throw new Error('Missing fields');
+        const custom = LS.get('customScenarios',[]).filter(x=>x.id!==sc.id); custom.push(sc); LS.set('customScenarios',custom);
+        loadScenarios(); $('scenario').innerHTML = scenarios.map(s=>'<option value="'+esc(s.id)+'" '+(s.id===sc.id?'selected':'')+'>'+esc(s.title)+'</option>').join('');
+        renderCastAndVoices(scenarios.find(s=>s.id===sc.id));
+        toast('Scenario loaded: '+sc.title);
+      }catch(err){ toast('That file is not a valid scenario: '+err.message); }
+    }; r.readAsText(f); e.target.value='';
+  };
+
+  $('btnStart').onclick = ()=>{
+    const openers = aiCharacters().filter(c=>c.opening).map(c=>({speaker:c.name, text:c.opening}));
+    showTurns(openers); speakTurns(openers);
+    if(history.length) return;
+    history = [{role:'user', content:'TEACHER: The meeting is starting. The student has walked in and sat down. Introduce yourselves briefly, then wait for their first question.'},{role:'assistant', content: JSON.stringify({turns:openers, question_type:'', tip:'', board:[], facts:[]})}];
+    lastTurns = openers; renderTurn(); saveSession();
+  };
+  $('btnSend').onclick = ()=>{ stopListening(); ask($('question').value); };
+  $('question').addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); stopListening(); ask($('question').value); } });
+  $('btnMic').onclick = ()=> listening? stopListening() : startListening();
+  $('btnRepeat').onclick = ()=> lastTurns.length && speakTurns(lastTurns);
+  $('btnNext').onclick = nextStudent;
+  $('btnLifeline').onclick = useLifeline;
+
+  $('btnExport').onclick = ()=> download(S.id+'-board.doc', boardHTML(), 'application/msword');
+  $('btnPrint').onclick = ()=> window.print();
+  $('btnSave').onclick = ()=> download(S.id+'-session.json', JSON.stringify({scenario:S.id, when:new Date().toISOString(), board, revealed:[...revealed], history}, null, 2), 'application/json');
+  let resetArmed = false;
+  $('btnReset').onclick = ()=>{ if(!resetArmed){ resetArmed=true; $('btnReset').textContent='Click again to clear everything'; setTimeout(()=>{resetArmed=false; $('btnReset').textContent='Reset';},4000); return; } resetArmed=false; $('btnReset').textContent='Reset'; stopSpeaking(); blankSession(); renderBoard(); saveSession(); toast('Cleared. Press Start meeting to begin again.'); };
+
+  $('btnTeacher').onclick = ()=> $('drawer').classList.toggle('open');
+  $('btnDrawerClose').onclick = ()=> $('drawer').classList.remove('open');
+  $('btnWhisper').onclick = ()=>{ whisperText = $('whisper').value.trim(); $('whisper').value=''; if(whisperText) toast('They will follow that in the next answer.'); };
+  document.addEventListener('keydown', e=>{
+    if(e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    if(e.key==='t'||e.key==='T') $('drawer').classList.toggle('open');
+    if(e.key==='Escape'){ $('drawer').classList.remove('open'); $('settings').classList.add('hidden'); $('help').classList.add('hidden'); }
+  });
+  if(!LS.get('apiKey','')) setTimeout(()=>$('help').classList.remove('hidden'), 300);
+}
+// ---------- PIN gate (only when the page is on a website, not a local file) ----------
+const PAGE_PIN_HASH = 'a1fb4e703a9ef1fa4936801721ff285a97ac85330856674412e054892afe6972'; // sha-256 of the PIN; empty string = no gate
+async function sha256(s){ const b = new TextEncoder().encode(s); const h = await crypto.subtle.digest('SHA-256', b); return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+async function gate(){
+  if(!PAGE_PIN_HASH || location.protocol==='file:' || !window.crypto || !crypto.subtle) return true;
+  if(LS.get('unlocked','')===PAGE_PIN_HASH) return true;
+  const g = $('gate'); g.classList.remove('hidden'); $('gatePin').focus();
+  return new Promise(res=>{
+    const tryPin = async ()=>{ const h = await sha256($('gatePin').value.trim()); if(h===PAGE_PIN_HASH){ LS.set('unlocked',h); g.classList.add('hidden'); res(true); } else { $('gateMsg').textContent='That PIN is not right.'; $('gatePin').value=''; $('gatePin').focus(); } };
+    $('gateGo').onclick = tryPin; $('gatePin').addEventListener('keydown', e=>{ if(e.key==='Enter') tryPin(); });
+  });
+}
+document.addEventListener('DOMContentLoaded', async ()=>{ await gate(); init(); });
+})();
+
+</script>
+</body>
+</html>
