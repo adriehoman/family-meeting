@@ -156,11 +156,12 @@
     <div class="heard" id="heard"></div>
     <div class="turnbar" id="turnbar">
       <span class="student" id="studentLabel">Student 1</span>
-      <span class="dots" id="dots"></span><span class="badge" style="font-size:.8rem" title="Green = open question, orange = closed question">green open · orange closed</span>
+      <span class="dots" id="dots"></span><span class="badge" id="dotLegend" style="font-size:.8rem" title="Green = open question, orange = closed question">green open · orange closed</span>
       <span class="badge hidden" id="qType"></span>
       <span style="flex:1"></span>
       <button class="lifeline" id="btnLifeline" title="Show a suggested question (one per student)">Lifeline: show me a question</button>
       <button id="btnNext" class="ghost">Next student</button>
+      <button id="btnBegin" class="ghost hidden" title="Finish the opening practice and move to the questions about the person">Begin questions</button>
       <button id="btnRepeat" class="ghost" title="Say the last answer again">Say again</button>
       <button id="btnStart" class="primary">Start meeting</button>
     </div>
@@ -267,6 +268,7 @@
         <label>Questions per student <select id="perStudent" style="width:auto"><option>2</option><option selected>3</option><option>4</option></select></label>
         <label><input type="checkbox" id="coachOn" checked style="width:auto"> Show coaching hints</label>
         <label><input type="checkbox" id="lifelineOn" checked style="width:auto"> Allow one lifeline per student</label>
+        <label><input type="checkbox" id="briefOn" checked style="width:auto"> Brief answers (one fact at a time, so every student discovers something)</label>
       </div>
       <div class="hint">Coaching hints talk about technique and which areas are still unexplored. They never give the question away. The lifeline shows one suggested question and can be used once per student.</div>
     </div>
@@ -308,7 +310,7 @@
     <ol>
       <li><b>Before class:</b> open Settings, paste your API key, press Load models, choose a Sonnet model, choose the scenario and a voice for each family member. Press Test to hear them. Save.</li>
       <li><b>Test the microphone</b> once. Click the microphone button, say "Hello Rosie, how are you today?", and check the words appear in the box.</li>
-      <li><b>Start the class:</b> press Start meeting. The family members introduce themselves.</li>
+      <li><b>Start the class:</b> press Start meeting. The family joins the video call and waits. The first student opens the meeting: introduces themselves and their role, says why they are meeting, checks the family can hear and see them, checks they are comfortable and have time, and asks about privacy or any needs. The checklist ticks off as they go. Press Next student to let others practise the opening, then <b>Begin questions</b>.</li>
       <li><b>Students ask questions:</b> press Next student when a new student comes up. Each student asks two or three questions (set in Settings): click the microphone, ask, click again to stop, check the words, press Send. If the microphone mishears, they can fix the words or type. After their last question a short summary of their turn appears. A stuck student can press the lifeline once to see a suggested question.</li>
       <li><b>The board fills in</b> on the right as information comes out. New points flash yellow. The progress bar shows how much of the story the class has uncovered.</li>
       <li><b>Teacher notes</b> (press <kbd>T</kbd>) show what is still hidden, cue lines if you play a family member yourself, and debrief questions. Close it before students read the screen. You can whisper a private instruction to the family from there.</li>
@@ -409,7 +411,7 @@ window.BUILTIN_SCENARIOS = [
   "title": "Wilson Blue - Family Meeting",
   "unit": "CHCAGE011 Provide support to people living with dementia",
   "person": "Wilson",
-  "setting": "KAMA Community residential aged care service, memory support unit. Wilson moved in yesterday. It is 10.30am. Wilson's wife Rosie and their son Clifton have come in to visit and have agreed to talk with a support worker so staff can support Wilson well. Both are sitting in the family room with the student.",
+  "setting": "KAMA Community residential aged care service, memory support unit. Wilson moved in yesterday. It is 10.30am. Wilson's wife Rosie and their son Clifton could not come in today, so they are joining a video call from Rosie's kitchen table on Clifton's laptop, to talk with a support worker so staff can support Wilson well. Rosie is not used to video calls; Clifton set it up.",
   "characters": [
     {
       "id": "rosie",
@@ -521,7 +523,7 @@ window.BUILTIN_SCENARIOS = [
   "title": "Val Theeson - Family Meeting",
   "unit": "CHCAGE011 Provide support to people living with dementia",
   "person": "Val",
-  "setting": "KAMA Community residential aged care service, memory support unit. Val moved in yesterday. It is 10.30am. Stuart has come in to visit and is happy to talk with staff so they can support Val well.",
+  "setting": "KAMA Community residential aged care service, memory support unit. Val moved in yesterday. It is 10.30am. Stuart could not come in today, so he is joining a video call from home on his tablet, happy to talk with staff so they can support Val well. He is a little unsure of the technology.",
   "characters": [
     {
       "id": "stuart",
@@ -610,10 +612,20 @@ let whisperText = '';
 let busy = false;
 let student = null;            // {n, q, types:[], facts, lifeline, coach}
 let lastSuggested = '';        // suggested next question from the last answer (lifeline)
+let stage = 'opening';         // 'opening' (introductions and checks) or 'questions'
+let openingDone = new Set();   // opening check ids covered so far
+const OPENING = [
+  {id:'intro', label:'Introduced yourself and your role'},
+  {id:'purpose', label:'Explained why you are meeting'},
+  {id:'hearing', label:'Checked they can hear and see you clearly'},
+  {id:'comfort', label:'Checked they are comfortable and have time'},
+  {id:'privacy', label:'Checked privacy and any needs (interpreter, cultural)'}
+];
 const cfg = {
   perStudent: ()=> parseInt(LS.get('perStudent', 3)),
   coachOn: ()=> LS.get('coachOn', true),
-  lifelineOn: ()=> LS.get('lifelineOn', true)
+  lifelineOn: ()=> LS.get('lifelineOn', true),
+  brief: ()=> LS.get('brief', true)
 };
 function newStudent(n){ return {n:n, q:0, types:[], facts:0, lifeline:false}; }
 
@@ -683,10 +695,18 @@ function setSpeaking(name){
 function renderTurn(){
   if(!student) student = newStudent(1);
   const per = cfg.perStudent();
-  $('studentLabel').textContent = 'Student '+student.n+(student.q>=per? ' · turn finished, press Next student' : ' · question '+(student.q+1)+' of '+per);
+  const opening = stage==='opening';
+  $('btnBegin').classList.toggle('hidden', !opening || !history.length);
+  $('btnBegin').classList.toggle('primary', opening && openingDone.size>=OPENING.length);
+  $('dots').classList.toggle('hidden', opening); $('dotLegend').classList.toggle('hidden', opening);
+  if(opening){
+    $('studentLabel').textContent = history.length? 'Student '+student.n+' · opening the meeting' : 'Student '+student.n;
+  } else {
+    $('studentLabel').textContent = 'Student '+student.n+(student.q>=per? ' · turn finished, press Next student' : ' · question '+(student.q+1)+' of '+per);
+  }
   const dots = []; for(let i=0;i<per;i++){ const ty = student.types[i]; dots.push('<i class="'+(ty? 'done '+(ty==='open'?'open':ty==='closed'?'closed':'') : '')+'" title="'+(ty||'')+'"></i>'); }
   $('dots').innerHTML = dots.join('');
-  const ll = $('btnLifeline'); ll.classList.toggle('hidden', !cfg.lifelineOn()); ll.disabled = !!student.lifeline || !history.length;
+  const ll = $('btnLifeline'); ll.classList.toggle('hidden', !cfg.lifelineOn() || opening); ll.disabled = !!student.lifeline || !history.length;
   ll.textContent = student.lifeline ? 'Lifeline used' : 'Lifeline: show me a question';
   $('btnNext').classList.toggle('primary', student.q>=per); $('btnNext').classList.toggle('ghost', student.q<per);
   renderExplore();
@@ -711,10 +731,30 @@ function turnSummary(){
   if(student.lifeline) parts.push('(Lifeline used.)');
   return parts.join(' ');
 }
+function openingHTML(){
+  const items = OPENING.map(o=>'<span style="display:inline-block;margin:2px 10px 2px 0">'+(openingDone.has(o.id)? '<span style="color:var(--ok)">&#10003;</span> ' : '<span style="color:var(--muted)">&#9675;</span> ')+esc(o.label)+'</span>').join('');
+  const done = openingDone.size>=OPENING.length;
+  return '<b>Opening checks</b> '+(done? '<span style="color:var(--ok)">all covered.</span> Press <b>Begin questions</b>, or <b>Next student</b> to let someone else practise the opening.' : '')+'<div style="font-size:.95em;margin-top:4px">'+items+'</div>';
+}
 function nextStudent(){
   const n = student? student.n+1 : 1;
-  student = newStudent(n); lastSuggested = lastSuggested; showCoach(''); $('qType').classList.add('hidden');
-  renderTurn(); saveSession(); toast('Student '+n+', your turn. Ask your first question.');
+  student = newStudent(n); $('qType').classList.add('hidden');
+  if(stage==='opening'){
+    openingDone = new Set();
+    // keep the model's memory short: the next student starts the opening again
+    history = history.slice(0,2).concat([{role:'user', content:'TEACHER: A different student has now sat down to practise opening the meeting. Behave as if the call has just connected again and you have not been introduced to this person. Do not mention the previous student.'},{role:'assistant', content: JSON.stringify({turns:[], question_type:'', tip:'', coach:'', suggested_question:'', board:[], facts:[], opening:[]})}]);
+    showTurns([{speaker:'', text: S.characters.map(c=>c.name).join(' and ')+' are on the call, waiting. Introduce yourself.'}]);
+    showCoach(openingHTML());
+    toast('Student '+n+': open the meeting.');
+  } else {
+    showCoach(''); toast('Student '+n+', your turn. Ask your first question.');
+  }
+  renderTurn(); saveSession();
+}
+function beginQuestions(){
+  stage = 'questions'; student = newStudent(student? student.n : 1); showCoach('');
+  history = history.concat([{role:'user', content:'TEACHER: The opening is finished. The meeting now moves to the questions about '+S.person+'. Answer the next questions normally.'},{role:'assistant', content: JSON.stringify({turns:[], question_type:'', tip:'', coach:'', suggested_question:'', board:[], facts:[], opening:[]})}]);
+  renderTurn(); saveSession(); toast('Questions stage. Each student asks '+cfg.perStudent()+' questions.');
 }
 function useLifeline(){
   if(!student || student.lifeline || !cfg.lifelineOn()) return;
@@ -726,19 +766,19 @@ function useLifeline(){
 }
 
 function blankSession(){
-  history = []; board = {}; revealed = new Set(); qCount = 0; lastTurns=[]; whisperText=''; student = newStudent(1); lastSuggested='';
+  history = []; board = {}; revealed = new Set(); qCount = 0; lastTurns=[]; whisperText=''; student = newStudent(1); lastSuggested=''; stage='opening'; openingDone = new Set();
   S.headings.forEach(h=>board[h]=[]);
   $('log').innerHTML=''; $('qType').classList.add('hidden'); showCoach(''); renderTurn();
   showTurns([{speaker:'', text: LS.get('apiKey','')? 'Press Start meeting when the class is ready.' : 'Press Settings to add your key, then press Start meeting.'}]);
 }
 function saveSession(){
-  LS.set('session_'+S.id, {history, board, revealed:[...revealed], qCount, lastTurns, student, lastSuggested, log: $('log').innerHTML});
+  LS.set('session_'+S.id, {history, board, revealed:[...revealed], qCount, lastTurns, student, lastSuggested, stage, openingDone:[...openingDone], log: $('log').innerHTML});
 }
 function restoreSession(){
   const s = LS.get('session_'+S.id, null);
   blankSession();
   if(s && s.history && s.history.length){
-    history = s.history; board = Object.assign(board, s.board||{}); revealed = new Set(s.revealed||[]); qCount = s.qCount||0; lastTurns = s.lastTurns||[]; student = s.student||newStudent(1); lastSuggested = s.lastSuggested||'';
+    history = s.history; board = Object.assign(board, s.board||{}); revealed = new Set(s.revealed||[]); qCount = s.qCount||0; lastTurns = s.lastTurns||[]; student = s.student||newStudent(1); lastSuggested = s.lastSuggested||''; stage = s.stage || 'questions'; openingDone = new Set(s.openingDone||[]);
     $('log').innerHTML = s.log||''; renderTurn();
     showTurns(lastTurns.length? lastTurns : [{speaker:'', text:'Meeting in progress. Ask the next question.'}]);
   }
@@ -802,6 +842,14 @@ function systemPrompt(){
   const lines = [];
   lines.push(`You are voicing ${names.length>1? 'the family members '+names.join(' and ') : names[0]} in a training session for aged care students in Australia. The students are support workers practising how to talk with a person's family to learn about someone living with dementia. The student is not acting; they are doing their normal job. You stay fully in character at all times.`);
   lines.push(`SETTING: ${S.setting}`);
+  if(stage==='opening'){
+    lines.push(`CURRENT STAGE: OPENING THE MEETING. The video call has just connected. You are waiting for the student (the support worker) to open the meeting properly. A good opening includes: introducing themselves by name and role; saying why they wanted to meet; checking you can hear and see them clearly; checking you are comfortable, have enough time and are somewhere private; and asking whether you need anything such as an interpreter or have any cultural needs. React like real people: if they introduce themselves warmly, respond warmly and give your names. If they launch straight into questions about ${S.person} without introducing themselves, do not answer the question; say something like "Sorry love, who am I speaking to?" or "Hang on, we cannot hear you very well, can you move closer?" Only give small talk during this stage, no facts about ${S.person}'s life or behaviour. If asked whether you can hear them, answer honestly (Rosie might say the sound is a bit quiet at first). Keep each turn under 40 words.`);
+  } else {
+    lines.push(`CURRENT STAGE: QUESTIONS ABOUT ${S.person.toUpperCase()}. The opening is done. Answer the student's questions.`);
+  }
+  if(cfg.brief()){
+    lines.push(`HOLD BACK DETAIL: this is a class of many students and each one must discover something. Give ONE piece of information per answer (one fact, one small memory), not a list of everything you know about the topic. Answer what was asked and stop. Do not volunteer related facts; wait for a follow-up question. An open question still gets a short story, but about one thing only, in at most 60 words. Add at most two board points per answer and only for what you actually said.`);
+  }
   cast.forEach(c=>{
     lines.push(`=== ${c.name.toUpperCase()} (${c.relation}) ===\nWHO ${c.name.toUpperCase()} IS: ${c.persona}\nWHAT ${c.name.toUpperCase()} KNOWS (share only what is asked about, as memories and stories, never as a list):\n${c.facts.map((f,i)=>(i+1)+'. '+f).join('\n')}\nWHAT ${c.name.toUpperCase()} DOES NOT RAISE OR DOES NOT KNOW:\n${(c.notKnown||[]).map(f=>'- '+f).join('\n')||'- (nothing special)'}`);
   });
@@ -814,7 +862,7 @@ function systemPrompt(){
   lines.push(`HOW TO ANSWER:
 - Answer only what the student asks. Do not volunteer other topics. A closed question (yes/no, or one fact) gets a short answer of one or two sentences. An open question ("tell me about...", "what was he like...", "how did you manage...") gets a short story of three to five sentences with real detail.
 - If the student addresses one person by name, that person answers. Otherwise the person who knows the topic best answers.
-- Keep the whole answer under about 100 words. It is spoken out loud in a classroom. Use at most two turns (two speakers) per answer, and usually just one.
+- Keep the whole answer under about ${cfg.brief()? 60 : 100} words. It is spoken out loud in a classroom. Use at most two turns (two speakers) per answer, and usually just one.
 - Speak plainly in everyday Australian English. Short sentences. No bullet points, no lists, no headings, no stage directions, no asterisks, no brackets.
 - If the student is warm, respectful, and listens, open up a little more. If the student is abrupt, rushed, or uses jargon, be a little more guarded and shorter, like a real person would. Never lecture the student and never break character to give feedback.
 - If asked something not covered, give a small believable answer that fits the story, or say you are not sure. Never contradict the facts.
@@ -827,7 +875,8 @@ function systemPrompt(){
  "coach":"one sentence (max 22 words) of coaching for the student: name the technique to use next or the area of ${S.person}'s life they have not asked about yet. Never include an actual question they could read out.",
  "suggested_question":"one good natural next question in plain English that follows from this answer or opens an unexplored area (used only if the student asks for a lifeline)",
  "board":[{"heading":"one of: ${S.headings.join(' | ')}","point":"a short phrase of at most 10 words, about ${S.person} or the family, third person"}],
- "facts":["ids of key facts revealed in this answer, from: ${(S.keyFacts||[]).map(f=>f.id+' = '+f.label).join('; ')}"]}
+ "facts":["ids of key facts revealed in this answer, from: ${(S.keyFacts||[]).map(f=>f.id+' = '+f.label).join('; ')}"],
+ "opening":["ids of opening checks the student has just covered in THIS message, from: intro = introduced self and role; purpose = said why they are meeting; hearing = checked you can hear or see them; comfort = checked you are comfortable or have time; privacy = checked privacy, interpreter or cultural needs. Empty list if none."]}
 The "speaker" value must be exactly one of: ${names.map(n=>'"'+n+'"').join(', ')}. Only add board points for information actually said in this answer. If nothing new, use an empty board list.`);
   return lines.join('\n\n');
 }
@@ -856,7 +905,7 @@ function parseJSON(text){
   let turns = Array.isArray(j.turns)? j.turns.filter(x=>x && x.text).map(x=>({speaker: (charByName(x.speaker)||first).name, text:String(x.text).trim()})) : [];
   if(!turns.length && j.reply) turns = [{speaker:first.name, text:String(j.reply).trim()}];
   if(!turns.length) turns = [{speaker:first.name, text:'...'}];
-  return {turns, question_type: j.question_type||'', tip: j.tip||'', coach: j.coach||'', suggested: j.suggested_question||'', board: j.board||[], facts: j.facts||[]};
+  return {turns, question_type: j.question_type||'', tip: j.tip||'', coach: j.coach||'', suggested: j.suggested_question||'', board: j.board||[], facts: j.facts||[], opening: Array.isArray(j.opening)? j.opening : []};
 }
 
 async function ask(text, opts){
@@ -881,7 +930,11 @@ async function ask(text, opts){
     const before = revealed.size; (j.facts||[]).forEach(id=>revealed.add(id)); renderBoard();
     const newFacts = revealed.size - before;
     if(j.suggested) lastSuggested = j.suggested;
-    if(!opts.silent){
+    if(!opts.silent && stage==='opening'){
+      (j.opening||[]).forEach(id=>{ if(OPENING.some(o=>o.id===id)) openingDone.add(id); });
+      const d = document.createElement('div'); d.innerHTML = '<b>S'+student.n+' opening:</b> '+esc(text)+' '+j.turns.map(t=>'<br><b>'+esc(t.speaker)+':</b> '+esc(t.text)).join(''); $('log').prepend(d);
+      showCoach(openingHTML()); qCount--; renderTurn();
+    } else if(!opts.silent){
       if(!student) student = newStudent(1);
       const qt = (j.question_type||'').toLowerCase();
       student.q++; student.types.push(qt||'other'); student.facts += newFacts;
@@ -1040,7 +1093,7 @@ function openSettings(){
   renderCastAndVoices(S);
   $('scenario').onchange = ()=> renderCastAndVoices(scenarios.find(s=>s.id===$('scenario').value)||S);
   $('speakOn').checked = LS.get('speakOn',true); $('rate').value = LS.get('rate',0.95); $('lang').value = LS.get('lang','en-AU');
-  $('perStudent').value = String(cfg.perStudent()); $('coachOn').checked = cfg.coachOn(); $('lifelineOn').checked = cfg.lifelineOn();
+  $('perStudent').value = String(cfg.perStudent()); $('coachOn').checked = cfg.coachOn(); $('lifelineOn').checked = cfg.lifelineOn(); $('briefOn').checked = cfg.brief();
   $('browserNote').innerHTML = (SR? 'Microphone input is available in this browser.' : 'This browser cannot do speech recognition. Open this file in <b>Google Chrome</b> or <b>Microsoft Edge</b>.') + (voices.length? ' '+voices.length+' voices found.' : ' No voices found yet, close and reopen Settings.');
   $('settings').classList.remove('hidden');
 }
@@ -1048,7 +1101,7 @@ function saveSettings(){
   LS.set('apiKey', $('apiKey').value.trim());
   LS.set('model', $('model').value);
   LS.set('speakOn', $('speakOn').checked); LS.set('rate', parseFloat($('rate').value)); LS.set('lang', $('lang').value);
-  LS.set('perStudent', parseInt($('perStudent').value)); LS.set('coachOn', $('coachOn').checked); LS.set('lifelineOn', $('lifelineOn').checked);
+  LS.set('perStudent', parseInt($('perStudent').value)); LS.set('coachOn', $('coachOn').checked); LS.set('lifelineOn', $('lifelineOn').checked); LS.set('brief', $('briefOn').checked);
   const sc = settingsScenario || S;
   const tp = [...document.querySelectorAll('select[data-cast]')].filter(s=>s.value==='teacher').map(s=>s.dataset.cast);
   const tpOld = LS.get('teacherPlays_'+sc.id, []);
@@ -1092,12 +1145,15 @@ function init(){
   };
 
   $('btnStart').onclick = ()=>{
-    const openers = aiCharacters().filter(c=>c.opening).map(c=>({speaker:c.name, text:c.opening}));
-    showTurns(openers); speakTurns(openers);
-    if(history.length) return;
-    history = [{role:'user', content:'TEACHER: The meeting is starting. The student has walked in and sat down. Introduce yourselves briefly, then wait for their first question.'},{role:'assistant', content: JSON.stringify({turns:openers, question_type:'', tip:'', board:[], facts:[]})}];
-    lastTurns = openers; renderTurn(); saveSession();
+    if(history.length){ toast('The meeting has already started. Press Reset to start again.'); return; }
+    stage = 'opening'; openingDone = new Set();
+    const names = aiCharacters().map(c=>c.name).join(' and ');
+    const joined = [{speaker:'', text: names+' have joined the video call and are waiting. Student 1: introduce yourself and open the meeting.'}];
+    showTurns(joined);
+    history = [{role:'user', content:'TEACHER: The video call has just connected. Wait quietly for the student to introduce themselves. Your first reply comes after their first message.'},{role:'assistant', content: JSON.stringify({turns:[], question_type:'', tip:'', coach:'', suggested_question:'', board:[], facts:[], opening:[]})}];
+    lastTurns = []; showCoach(openingHTML()); renderTurn(); saveSession();
   };
+  $('btnBegin').onclick = beginQuestions;
   $('btnSend').onclick = ()=>{ stopListening(); ask($('question').value); };
   $('question').addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); stopListening(); ask($('question').value); } });
   $('btnMic').onclick = ()=> listening? stopListening() : startListening();
