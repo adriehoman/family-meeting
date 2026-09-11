@@ -776,19 +776,19 @@ function useLifeline(){
 }
 
 function blankSession(){
-  history = []; board = {}; revealed = new Set(); qCount = 0; lastTurns=[]; whisperText=''; student = newStudent(1); lastSuggested=''; stage='opening'; openingDone = new Set();
+  history = []; board = {}; revealed = new Set(); qCount = 0; lastTurns=[]; whisperText=''; student = newStudent(1); lastSuggested=''; stage='opening'; openingDone = new Set(); boardFacts = new Set();
   S.headings.forEach(h=>board[h]=[]);
   $('log').innerHTML=''; $('qType').classList.add('hidden'); showCoach(''); renderTurn();
   showTurns([{speaker:'', text: LS.get('apiKey','')? 'Press Start meeting when the class is ready.' : 'Press Settings to add your key, then press Start meeting.'}]);
 }
 function saveSession(){
-  LS.set('session_'+S.id, {history, board, revealed:[...revealed], qCount, lastTurns, student, lastSuggested, stage, openingDone:[...openingDone], log: $('log').innerHTML});
+  LS.set('session_'+S.id, {history, board, revealed:[...revealed], qCount, lastTurns, student, lastSuggested, stage, openingDone:[...openingDone], boardFacts:[...boardFacts], log: $('log').innerHTML});
 }
 function restoreSession(){
   const s = LS.get('session_'+S.id, null);
   blankSession();
   if(s && s.history && s.history.length){
-    history = s.history; board = Object.assign(board, s.board||{}); revealed = new Set(s.revealed||[]); qCount = s.qCount||0; lastTurns = s.lastTurns||[]; student = s.student||newStudent(1, true); if(student.intro===undefined) student.intro = true; lastSuggested = s.lastSuggested||''; stage = s.stage || 'questions'; openingDone = new Set(s.openingDone||[]);
+    history = s.history; board = Object.assign(board, s.board||{}); revealed = new Set(s.revealed||[]); qCount = s.qCount||0; lastTurns = s.lastTurns||[]; student = s.student||newStudent(1, true); if(student.intro===undefined) student.intro = true; lastSuggested = s.lastSuggested||''; stage = s.stage || 'questions'; openingDone = new Set(s.openingDone||[]); boardFacts = new Set(s.boardFacts||[]);
     $('log').innerHTML = s.log||''; renderTurn();
     showTurns(lastTurns.length? lastTurns : [{speaker:'', text:'Meeting in progress. Ask the next question.'}]);
   }
@@ -807,7 +807,12 @@ function renderBoard(){
   if($('explore')) renderExplore();
   $('tFacts').innerHTML = (S.keyFacts||[]).map(f=>'<li class="'+(revealed.has(f.id)?'done':'')+'">'+esc(f.label)+' <span style="color:var(--muted)">('+esc(f.heading)+')</span></li>').join('');
 }
-function addToBoard(items){
+let boardFacts = new Set();   // key fact ids already represented on the board
+const STOP = new Set(['the','a','an','and','or','of','to','in','on','at','for','with','his','her','he','she','was','is','were','from','when','while','that','it','as','by','be','has','had','not','into','up','out','very','about','after','before','until','wilson','val','rosie','clifton','stuart']);
+function words(s){ return new Set(String(s).toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(w=>w && !STOP.has(w) && w.length>2)); }
+function similar(a1,b1){ const A=words(a1), B=words(b1); if(!A.size||!B.size) return false; let n=0; A.forEach(w=>{ if(B.has(w)) n++; }); const j = n/Math.min(A.size,B.size); return j>=0.6; }
+function addToBoard(items, reported, fresh){
+  reported = reported||[]; fresh = fresh||[];
   const added = [];
   (items||[]).forEach(it=>{
     if(!it || !it.heading || !it.point) return;
@@ -816,9 +821,14 @@ function addToBoard(items){
     if(!h) return;
     const p = String(it.point).trim().replace(/\.$/,'');
     if(!p) return;
+    let fid = it.fact && (S.keyFacts||[]).some(f=>f.id===it.fact) ? it.fact : '';
+    if(!fid && reported.length && !fresh.length) return;           // answer only repeated facts already known
+    if(!fid && fresh.length===1) fid = fresh[0];                    // untagged point in an answer with one new fact
+    if(fid && boardFacts.has(fid)) return;                         // same fact already on the board
+    const all = [].concat(...S.headings.map(x=>board[x]||[]));
     const norm = p.toLowerCase();
-    if((board[h]||[]).some(x=>x.toLowerCase()===norm || x.toLowerCase().includes(norm) || norm.includes(x.toLowerCase()))) return;
-    board[h].push(p); added.push(h+'|'+p);
+    if(all.some(x=>x.toLowerCase()===norm || x.toLowerCase().includes(norm) || norm.includes(x.toLowerCase()) || similar(x,p))) return;
+    board[h].push(p); added.push(h+'|'+p); if(fid) boardFacts.add(fid);
   });
   renderBoard();
   added.forEach(key=>{
@@ -886,10 +896,10 @@ function systemPrompt(){
  "tip":"one short, kind sentence for the student about their question technique (max 14 words), or empty string",
  "coach":"one sentence (max 22 words) of coaching for the student: name the technique to use next or the area of ${S.person}'s life they have not asked about yet. Never include an actual question they could read out.",
  "suggested_question":"one good natural next question in plain English that follows from this answer or opens an unexplored area (used only if the student asks for a lifeline)",
- "board":[{"heading":"one of: ${S.headings.join(' | ')}","point":"a short phrase of at most 10 words, about ${S.person} or the family, third person"}],
+ "board":[{"heading":"one of: ${S.headings.join(' | ')}","point":"a short phrase of at most 10 words, about ${S.person} or the family, third person","fact":"the id of the key fact this point belongs to, or empty string if it matches none"}],
  "facts":["ids of key facts revealed in this answer, from: ${(S.keyFacts||[]).map(f=>f.id+' = '+f.label).join('; ')}"],
  "opening":["ids of opening checks the student has just covered in THIS message, from: intro = introduced self and role; purpose = said why they are meeting; hearing = checked you can hear or see them; comfort = checked you are comfortable or have time; privacy = checked privacy, interpreter or cultural needs. Empty list if none."]}
-The "speaker" value must be exactly one of: ${names.map(n=>'"'+n+'"').join(', ')}. Only add board points for information actually said in this answer. If nothing new, use an empty board list.`);
+The "speaker" value must be exactly one of: ${names.map(n=>'"'+n+'"').join(', ')}. Only add board points for information actually said in this answer, and never for a fact that has already come up earlier in this conversation (the board already has it). One point per fact. If nothing new, use an empty board list.`);
   return lines.join('\n\n');
 }
 
@@ -942,8 +952,10 @@ async function ask(text, opts){
     const gated = (stage==='opening') || !student.intro;   // nothing counts or reaches the board until introduced
     let newFacts = 0;
     if(!gated){
-      addToBoard(j.board);
-      const before = revealed.size; (j.facts||[]).forEach(id=>revealed.add(id)); renderBoard();
+      const reported = (j.facts||[]).filter(id=>(S.keyFacts||[]).some(f=>f.id===id));
+      const fresh = reported.filter(id=>!revealed.has(id));
+      addToBoard(j.board, reported, fresh);
+      const before = revealed.size; reported.forEach(id=>revealed.add(id)); renderBoard();
       newFacts = revealed.size - before;
       if(j.suggested) lastSuggested = j.suggested;
     }
