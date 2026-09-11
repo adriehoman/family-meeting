@@ -156,12 +156,12 @@
     <div class="heard" id="heard"></div>
     <div class="turnbar" id="turnbar">
       <span class="student" id="studentLabel">Student 1</span>
-      <span class="dots" id="dots"></span><span class="badge" id="dotLegend" style="font-size:.8rem" title="Green = open question, orange = closed question">green open · orange closed</span>
+      <span class="dots" id="dots"></span><span class="badge" id="dotLegend" style="font-size:.8rem" title="First mark = introduction done. Then one dot per question: green = open, orange = closed">intro · green open · orange closed</span>
       <span class="badge hidden" id="qType"></span>
       <span style="flex:1"></span>
       <button class="lifeline" id="btnLifeline" title="Show a suggested question (one per student)">Lifeline: show me a question</button>
       <button id="btnNext" class="ghost">Next student</button>
-      <button id="btnBegin" class="ghost hidden" title="Finish the opening practice and move to the questions about the person">Begin questions</button>
+      <button id="btnBegin" class="ghost hidden" title="Teacher only: skip the rest of the opening and move to the questions">Skip opening</button>
       <button id="btnRepeat" class="ghost" title="Say the last answer again">Say again</button>
       <button id="btnStart" class="primary">Start meeting</button>
     </div>
@@ -627,7 +627,7 @@ const cfg = {
   lifelineOn: ()=> LS.get('lifelineOn', true),
   brief: ()=> LS.get('brief', true)
 };
-function newStudent(n){ return {n:n, q:0, types:[], facts:0, lifeline:false}; }
+function newStudent(n, intro){ return {n:n, q:0, types:[], facts:0, lifeline:false, intro: !!intro}; }
 
 function normalise(sc){
   // Accept old single-character files as well as the new "characters" list.
@@ -697,16 +697,18 @@ function renderTurn(){
   const per = cfg.perStudent();
   const opening = stage==='opening';
   $('btnBegin').classList.toggle('hidden', !opening || !history.length);
-  $('btnBegin').classList.toggle('primary', opening && openingDone.size>=OPENING.length);
-  $('dots').classList.toggle('hidden', opening); $('dotLegend').classList.toggle('hidden', opening);
   if(opening){
-    $('studentLabel').textContent = history.length? 'Student '+student.n+' · opening the meeting' : 'Student '+student.n;
+    $('studentLabel').textContent = history.length? 'Student '+student.n+' · open the meeting first' : 'Student '+student.n;
+  } else if(!student.intro){
+    $('studentLabel').textContent = 'Student '+student.n+' · introduce yourself first';
   } else {
     $('studentLabel').textContent = 'Student '+student.n+(student.q>=per? ' · turn finished, press Next student' : ' · question '+(student.q+1)+' of '+per);
   }
-  const dots = []; for(let i=0;i<per;i++){ const ty = student.types[i]; dots.push('<i class="'+(ty? 'done '+(ty==='open'?'open':ty==='closed'?'closed':'') : '')+'" title="'+(ty||'')+'"></i>'); }
+  const introDone = !opening && student.intro;
+  const dots = ['<i class="'+(introDone? 'done' : '')+'" title="Introduction" style="border-radius:6px">'+'</i>'];
+  for(let i=0;i<per;i++){ const ty = student.types[i]; dots.push('<i class="'+(ty? 'done '+(ty==='open'?'open':ty==='closed'?'closed':'') : '')+'" title="'+(ty||'')+'"></i>'); }
   $('dots').innerHTML = dots.join('');
-  const ll = $('btnLifeline'); ll.classList.toggle('hidden', !cfg.lifelineOn() || opening); ll.disabled = !!student.lifeline || !history.length;
+  const ll = $('btnLifeline'); ll.classList.toggle('hidden', !cfg.lifelineOn()); ll.disabled = !!student.lifeline || !history.length || opening || !student.intro;
   ll.textContent = student.lifeline ? 'Lifeline used' : 'Lifeline: show me a question';
   $('btnNext').classList.toggle('primary', student.q>=per); $('btnNext').classList.toggle('ghost', student.q<per);
   renderExplore();
@@ -747,14 +749,22 @@ function nextStudent(){
     showCoach(openingHTML());
     toast('Student '+n+': open the meeting.');
   } else {
-    showCoach(''); toast('Student '+n+', your turn. Ask your first question.');
+    history = history.concat([{role:'user', content:'TEACHER: A different student (a new staff member) has now taken over the call. They should say hello and give their name and role before asking anything. If they ask about '+S.person+' before introducing themselves, do not answer; ask kindly who you are speaking to. Once they introduce themselves, greet them briefly and carry on.'},{role:'assistant', content: JSON.stringify({turns:[], question_type:'', tip:'', coach:'', suggested_question:'', board:[], facts:[], opening:[]})}]);
+    showCoach('<b>Student '+n+':</b> say hello, your name and your role. Then ask your '+cfg.perStudent()+' questions.');
+    toast('Student '+n+': introduce yourself, then ask your questions.');
   }
   renderTurn(); saveSession();
 }
+function finishOpening(){
+  stage = 'questions'; student.intro = true;
+  history = history.concat([{role:'user', content:'TEACHER: The opening is complete. The meeting now moves to questions about '+S.person+'. This same student will ask the questions. Answer normally from now on.'},{role:'assistant', content: JSON.stringify({turns:[], question_type:'', tip:'', coach:'', suggested_question:'', board:[], facts:[], opening:[]})}]);
+  showCoach('<b>Opening complete.</b> Student '+student.n+', now ask your '+cfg.perStudent()+' questions about '+S.person+'.', true);
+  renderTurn(); saveSession();
+}
 function beginQuestions(){
-  stage = 'questions'; student = newStudent(student? student.n : 1); showCoach('');
-  history = history.concat([{role:'user', content:'TEACHER: The opening is finished. The meeting now moves to the questions about '+S.person+'. Answer the next questions normally.'},{role:'assistant', content: JSON.stringify({turns:[], question_type:'', tip:'', coach:'', suggested_question:'', board:[], facts:[], opening:[]})}]);
-  renderTurn(); saveSession(); toast('Questions stage. Each student asks '+cfg.perStudent()+' questions.');
+  // Teacher skips the rest of the opening
+  if(!student) student = newStudent(1);
+  finishOpening(); toast('Opening skipped. Questions stage.');
 }
 function useLifeline(){
   if(!student || student.lifeline || !cfg.lifelineOn()) return;
@@ -778,7 +788,7 @@ function restoreSession(){
   const s = LS.get('session_'+S.id, null);
   blankSession();
   if(s && s.history && s.history.length){
-    history = s.history; board = Object.assign(board, s.board||{}); revealed = new Set(s.revealed||[]); qCount = s.qCount||0; lastTurns = s.lastTurns||[]; student = s.student||newStudent(1); lastSuggested = s.lastSuggested||''; stage = s.stage || 'questions'; openingDone = new Set(s.openingDone||[]);
+    history = s.history; board = Object.assign(board, s.board||{}); revealed = new Set(s.revealed||[]); qCount = s.qCount||0; lastTurns = s.lastTurns||[]; student = s.student||newStudent(1, true); if(student.intro===undefined) student.intro = true; lastSuggested = s.lastSuggested||''; stage = s.stage || 'questions'; openingDone = new Set(s.openingDone||[]);
     $('log').innerHTML = s.log||''; renderTurn();
     showTurns(lastTurns.length? lastTurns : [{speaker:'', text:'Meeting in progress. Ask the next question.'}]);
   }
@@ -843,7 +853,9 @@ function systemPrompt(){
   lines.push(`You are voicing ${names.length>1? 'the family members '+names.join(' and ') : names[0]} in a training session for aged care students in Australia. The students are support workers practising how to talk with a person's family to learn about someone living with dementia. The student is not acting; they are doing their normal job. You stay fully in character at all times.`);
   lines.push(`SETTING: ${S.setting}`);
   if(stage==='opening'){
-    lines.push(`CURRENT STAGE: OPENING THE MEETING. The video call has just connected. You are waiting for the student (the support worker) to open the meeting properly. A good opening includes: introducing themselves by name and role; saying why they wanted to meet; checking you can hear and see them clearly; checking you are comfortable, have enough time and are somewhere private; and asking whether you need anything such as an interpreter or have any cultural needs. React like real people: if they introduce themselves warmly, respond warmly and give your names. If they launch straight into questions about ${S.person} without introducing themselves, do not answer the question; say something like "Sorry love, who am I speaking to?" or "Hang on, we cannot hear you very well, can you move closer?" Only give small talk during this stage, no facts about ${S.person}'s life or behaviour. If asked whether you can hear them, answer honestly (Rosie might say the sound is a bit quiet at first). Keep each turn under 40 words.`);
+    lines.push(`CURRENT STAGE: OPENING THE MEETING. The video call has just connected. You are waiting for the student (the support worker) to open the meeting properly. A good opening includes: introducing themselves by name and role; saying why they wanted to meet; checking you can hear and see them clearly; checking you are comfortable, have enough time and are somewhere private; and asking whether you need anything such as an interpreter or have any cultural needs. React like real people: if they introduce themselves warmly, respond warmly and give your names. If they launch straight into questions about ${S.person} without introducing themselves, do not answer the question; say something like "Sorry love, who am I speaking to?" or "Hang on, we cannot hear you very well, can you move closer?" During this stage you must NOT give any facts about ${S.person}'s life, likes, or behaviour, even if asked directly and even if the opening checks are complete; say warmly that you are happy to talk about ${S.person} once everyone is settled, or ask who you are speaking to. Small talk only. If asked whether you can hear them, answer honestly (Rosie might say the sound is a bit quiet at first). Keep each turn under 40 words.`);
+  } else if(student && !student.intro){
+    lines.push(`CURRENT STAGE: A NEW STAFF MEMBER HAS JUST TAKEN OVER THE CALL. The meeting was already opened by a colleague, so no need for the full checks again, but this person has not introduced themselves yet. If they ask about ${S.person} before saying who they are, do NOT answer the question: kindly ask who you are speaking to ("Sorry love, and you are?"). Once they give their name and role, greet them warmly in a few words and, if they asked a question in the same message, answer it. Report "intro" in the opening list when they have introduced themselves.`);
   } else {
     lines.push(`CURRENT STAGE: QUESTIONS ABOUT ${S.person.toUpperCase()}. The opening is done. Answer the student's questions.`);
   }
@@ -926,16 +938,28 @@ async function ask(text, opts){
     if(history.length>40) history = history.slice(history.length-40);
     lastTurns = j.turns; showTurns(j.turns, false);
     speakTurns(j.turns);
-    addToBoard(j.board);
-    const before = revealed.size; (j.facts||[]).forEach(id=>revealed.add(id)); renderBoard();
-    const newFacts = revealed.size - before;
-    if(j.suggested) lastSuggested = j.suggested;
+    if(!student) student = newStudent(1, stage!=='opening');
+    const gated = (stage==='opening') || !student.intro;   // nothing counts or reaches the board until introduced
+    let newFacts = 0;
+    if(!gated){
+      addToBoard(j.board);
+      const before = revealed.size; (j.facts||[]).forEach(id=>revealed.add(id)); renderBoard();
+      newFacts = revealed.size - before;
+      if(j.suggested) lastSuggested = j.suggested;
+    }
     if(!opts.silent && stage==='opening'){
       (j.opening||[]).forEach(id=>{ if(OPENING.some(o=>o.id===id)) openingDone.add(id); });
       const d = document.createElement('div'); d.innerHTML = '<b>S'+student.n+' opening:</b> '+esc(text)+' '+j.turns.map(t=>'<br><b>'+esc(t.speaker)+':</b> '+esc(t.text)).join(''); $('log').prepend(d);
-      showCoach(openingHTML()); qCount--; renderTurn();
+      qCount--;
+      if(openingDone.size>=OPENING.length){ finishOpening(); }
+      else { showCoach(openingHTML()); renderTurn(); }
+    } else if(!opts.silent && !student.intro){
+      const d = document.createElement('div'); d.innerHTML = '<b>S'+student.n+' intro:</b> '+esc(text)+' '+j.turns.map(t=>'<br><b>'+esc(t.speaker)+':</b> '+esc(t.text)).join(''); $('log').prepend(d);
+      qCount--;
+      if((j.opening||[]).includes('intro')){ student.intro = true; showCoach('<b>Thanks, Student '+student.n+'.</b> Now ask your '+cfg.perStudent()+' questions about '+S.person+'.', true); }
+      else { showCoach('<b>Student '+student.n+':</b> introduce yourself first: your name and your role. Then your questions.'); }
+      renderTurn();
     } else if(!opts.silent){
-      if(!student) student = newStudent(1);
       const qt = (j.question_type||'').toLowerCase();
       student.q++; student.types.push(qt||'other'); student.facts += newFacts;
       logLine(text, j.turns);
@@ -1151,7 +1175,7 @@ function init(){
     const joined = [{speaker:'', text: names+' have joined the video call and are waiting. Student 1: introduce yourself and open the meeting.'}];
     showTurns(joined);
     history = [{role:'user', content:'TEACHER: The video call has just connected. Wait quietly for the student to introduce themselves. Your first reply comes after their first message.'},{role:'assistant', content: JSON.stringify({turns:[], question_type:'', tip:'', coach:'', suggested_question:'', board:[], facts:[], opening:[]})}];
-    lastTurns = []; showCoach(openingHTML()); renderTurn(); saveSession();
+    lastTurns = []; student = newStudent(1, false); showCoach(openingHTML()); renderTurn(); saveSession();
   };
   $('btnBegin').onclick = beginQuestions;
   $('btnSend').onclick = ()=>{ stopListening(); ask($('question').value); };
