@@ -95,6 +95,31 @@
   @keyframes pop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
   .boardfoot{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 
+  /* Support visit: what you can see, calm meter, checklist */
+  .see{flex:none;margin:0 0 10px;padding:8px 14px;border-radius:12px;background:#f3efe6;border:2px dashed var(--line);color:#3f4a4f;font-size:1rem;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .see .txt{flex:1;min-width:220px;font-style:italic}
+  .see .txt b{font-style:normal;color:var(--muted);font-weight:600}
+  .see .calm{flex:none;font-size:.9rem;color:var(--muted);display:flex;align-items:center;gap:5px}
+  .see .calm i{width:14px;height:14px;border-radius:50%;background:var(--chip);border:2px solid var(--line);display:inline-block}
+  .see .calm i.on{background:#e0b93a;border-color:#e0b93a}
+  .see .calm b{color:var(--ink)}
+  .board.checklist{display:block}
+  .cl-tasks{background:var(--accent-soft);border-radius:12px;padding:8px 12px;margin-bottom:10px;font-size:.98rem}
+  .cl-tasks summary{cursor:pointer}
+  .cl-tasks ul{margin:4px 0 0;padding-left:20px}
+  .cl-group{background:#fbf9f4;border:2px solid var(--line);border-radius:12px;padding:8px 12px;margin-bottom:8px}
+  .cl-group h3{margin:0 0 4px;font-size:.95rem;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;display:flex;justify-content:space-between;gap:8px}
+  .cl-group h3 .tag{font-size:.75rem;background:var(--chip);color:var(--muted);padding:1px 8px;border-radius:999px;text-transform:none;letter-spacing:0;font-weight:600;white-space:nowrap}
+  .cl-group.later{opacity:.55}
+  .cl-item{display:flex;gap:8px;align-items:flex-start;font-size:1rem;margin:2px 0;padding:1px 4px;border-radius:6px}
+  .cl-item .mark{flex:none;width:1.1em;color:var(--muted);font-weight:700}
+  .cl-item.met{color:var(--muted)}
+  .cl-item.met .mark{color:var(--ok)}
+  .cl-item.new{background:#fff5c2;animation:pop .4s}
+  .cl-parts{display:inline-flex;gap:4px;flex-wrap:wrap;margin-left:2px}
+  .cl-parts span{font-size:.8rem;padding:0 8px;border-radius:999px;background:var(--chip);color:var(--muted)}
+  .cl-parts span.met{background:var(--ok-soft);color:var(--ok)}
+
   /* Drawers and modals */
   .drawer{position:fixed;left:0;right:0;bottom:0;background:#fffdf7;border-top:3px solid var(--accent);box-shadow:0 -8px 30px rgba(0,0,0,.15);max-height:55vh;overflow:auto;padding:14px 22px;font-size:.98rem;transform:translateY(100%);transition:transform .25s;z-index:20}
   .drawer.open{transform:none}
@@ -143,6 +168,7 @@
 <main>
   <section class="card left">
     <div class="tiles" id="tiles"></div>
+    <div class="see hidden" id="see"></div>
 
     <div class="answer" id="answer"></div>
 
@@ -152,6 +178,7 @@
       </button>
       <textarea id="question" placeholder="Your question appears here. You can also type it, then press Send or Enter."></textarea>
       <button class="primary" id="btnSend" style="min-width:110px">Send</button>
+      <button id="btnDo" class="hidden" style="min-width:110px;background:#e9dcc0" title="Send it as an action: something you do, for example sit down next to her or hand over a brochure">Do</button>
     </div>
     <div class="heard" id="heard"></div>
     <div class="turnbar" id="turnbar">
@@ -162,6 +189,7 @@
       <button class="lifeline" id="btnLifeline" title="Show a suggested question (one per student)">Lifeline: show me a question</button>
       <button id="btnNext" class="ghost">Next student</button>
       <button id="btnBegin" class="ghost hidden" title="Teacher only: skip the rest of the opening and move to the questions">Skip opening</button>
+      <button id="btnStage" class="ghost hidden">Go to Lance</button>
       <button id="btnRepeat" class="ghost" title="Say the last answer again">Say again</button>
       <button id="btnStart" class="primary">Start meeting</button>
     </div>
@@ -173,7 +201,7 @@
 
   <section class="card right">
     <div class="boardhead">
-      <h2>What we have learned about <span id="personName">Wilson</span></h2>
+      <h2 id="boardTitle">What we have learned about <span id="personName">Wilson</span></h2>
       <span class="progress" id="progress"></span>
     </div>
     <div class="bar"><i id="barFill"></i></div>
@@ -200,6 +228,14 @@
       <p id="tRole"></p>
       <h3>Cue lines</h3>
       <ul id="tCues"></ul>
+      <div id="tVisit" class="hidden">
+        <h3>Checklist tools</h3>
+        <div class="row" style="flex-direction:column;align-items:stretch;gap:6px">
+          <button id="btnCheckAll" title="One extra check of the whole conversation for points the live check missed">Check the whole conversation again</button>
+          <button id="btnSkipStage" class="ghost" title="Use only if the AI clearly missed a point the class showed">Move on now (skip the checklist)</button>
+          <button id="btnChecklistDoc" class="ghost">Download checklist with evidence (Word)</button>
+        </div>
+      </div>
     </div>
     <div>
       <h3>Still to be uncovered</h3>
@@ -270,7 +306,7 @@
         <label><input type="checkbox" id="lifelineOn" checked style="width:auto"> Allow one lifeline per student</label>
         <label><input type="checkbox" id="briefOn" checked style="width:auto"> Brief answers (one fact at a time, so every student discovers something)</label>
       </div>
-      <div class="hint">Coaching hints talk about technique and which areas are still unexplored. They never give the question away. The lifeline shows one suggested question and can be used once per student.</div>
+      <div class="hint">Coaching hints talk about technique and which areas are still unexplored. They never give the question away. The lifeline shows one suggested question and can be used once per student. Support visits (Cherry Wilkes) always give each student 5 turns.</div>
     </div>
 
     <div class="field">
@@ -315,6 +351,14 @@
       <li><b>The board fills in</b> on the right as information comes out. New points flash yellow. The progress bar shows how much of the story the class has uncovered.</li>
       <li><b>Teacher notes</b> (press <kbd>T</kbd>) show what is still hidden, cue lines if you play a family member yourself, and debrief questions. Close it before students read the screen. You can whisper a private instruction to the family from there.</li>
       <li><b>At the end:</b> press Download board (Word) or Print. Students use the board for the progress note and the activity plan.</li>
+    </ol>
+    <h3>Support visit scenarios (Cherry Wilkes)</h3>
+    <ol>
+      <li><b>Start visit.</b> Cherry is crying in her bedroom. The whole class is one support worker. Each student has 5 turns.</li>
+      <li><b>Say or Do.</b> Speak or type, then press <b>Say</b>. For an action (sit down, pass a tissue, give a brochure, dial a number), say or type what you do, then press <b>Do</b>.</li>
+      <li><b>The checklist</b> on the right turns green as the class shows each point. "Still to show" under the coach line helps the next student choose. The box above the answer shows what you can see, and how upset Cherry is.</li>
+      <li><b>Go to Lance</b> works only when every point for the visit is green. If points are missing, the page checks the whole conversation once more, then lists what is still needed. Teacher notes has "Move on now" if the AI clearly missed something.</li>
+      <li><b>Report to Lance</b>, then <b>Finish session</b>. Press <b>Download session (Word)</b>: it has everything that was said and done, and an empty progress note table for each student.</li>
     </ol>
     <p><b>If something fails:</b> the internet or microphone can drop out. Typing still works without a microphone. If the API fails, you have the printed case notes and can play Rosie yourself.</p>
     <p><b>Privacy:</b> do not say or type student names. Questions go to Anthropic's API under your key. Nothing is stored anywhere except this browser.</p>
