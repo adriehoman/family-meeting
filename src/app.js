@@ -94,7 +94,8 @@ function setupMode(){
   $('btnLifeline').title = v? 'Show one idea for what to say or do (one per student)' : 'Show a suggested question (one per student)';
   $('boardTitle').innerHTML = v? 'Checklist: what the class has shown<span id="personName" class="hidden"></span>' : 'What we have learned about <span id="personName"></span>';
   $('board').className = v? 'board checklist' : 'board';
-  $('btnExport').textContent = v? 'Download session (Word)' : 'Download board (Word)';
+  $('btnExport').textContent = v? 'Session for students (Word)' : 'Download board (Word)';
+  $('btnExportTeacher').classList.toggle('hidden', !v);
 }
 function picKey(sc, c){ return 'pic_'+sc.id+'_'+c.id; }
 function portraitHTML(sc, c){
@@ -214,14 +215,14 @@ function blankSession(){
   if(isVisit()) showTurns([{speaker:'', text: LS.get('apiKey','')? 'Press Start visit when the class is ready.' : 'Press Settings to add your key, then press Start visit.'}]);
 }
 function saveSession(){
-  LS.set('session_'+S.id, Object.assign({history, board, revealed:[...revealed], qCount, lastTurns, student, lastSuggested, stage, openingDone:[...openingDone], boardFacts:[...boardFacts], log: $('log').innerHTML}, isVisit()? {vstage, points, calm, seeText, vlog} : {}));
+  LS.set('session_'+S.id, Object.assign({history, board, revealed:[...revealed], qCount, lastTurns, student, lastSuggested, stage, openingDone:[...openingDone], boardFacts:[...boardFacts], log: $('log').innerHTML}, isVisit()? {vstage, points, calm, seeText, vlog, names, quizSeen:[...quizSeen]} : {}));
 }
 function restoreSession(){
   const s = LS.get('session_'+S.id, null);
   blankSession();
   if(s && s.history && s.history.length){
     history = s.history; board = Object.assign(board, s.board||{}); revealed = new Set(s.revealed||[]); qCount = s.qCount||0; lastTurns = s.lastTurns||[]; student = s.student||newStudent(1, true); if(student.intro===undefined) student.intro = true; lastSuggested = s.lastSuggested||''; stage = s.stage || 'questions'; openingDone = new Set(s.openingDone||[]); boardFacts = new Set(s.boardFacts||[]);
-    if(isVisit()){ vstage = s.vstage || vstage; points = s.points||{}; calm = s.calm||calm; seeText = s.seeText||''; vlog = s.vlog||[]; }
+    if(isVisit()){ vstage = s.vstage || vstage; points = s.points||{}; calm = s.calm||calm; seeText = s.seeText||''; vlog = s.vlog||[]; names = s.names||{}; quizSeen = new Set(s.quizSeen||[]); }
     $('log').innerHTML = s.log||''; renderTurn();
     showTurns(lastTurns.length? lastTurns : [{speaker:'', text:'Meeting in progress. Ask the next question.'}]);
   }
@@ -440,6 +441,39 @@ let seeText = '';             // what the students can see right now
 let vlog = [];                // [{stage, n, kind:'say'|'do', text, turns, see, time}]
 let sessionGen = 0;           // goes up on every Reset; an AI reply that arrives for an older session is ignored
 let lastNarration = '';       // what the narrator read before the last answer (Say again repeats it)
+let names = {};               // student number -> first name. Stays in this browser: never sent to the AI or read aloud.
+let quizSeen = new Set();     // observer quiz question numbers reached so far
+let nameFor = 0;              // student number the name box is asking for
+
+function whoLabel(n){ return names[n]? names[n]+' (Student '+n+')' : 'Student '+n; }
+function whoShort(n){ return names[n]? names[n]+' (S'+n+')' : 'Student '+n; }
+function itemNumbers(){ const m = {}; let k = 0; (S.checklist||[]).forEach(g=>(g.items||[]).forEach(it=>{ m[it.id] = ++k; })); return m; }   // same numbers as the quiz and hints
+function quizNumbersFor(freshPoints, freshFacts){
+  // A quiz question is reached when its checklist point is shown, or when the person says something it asks about.
+  const m = itemNumbers(), nums = new Set();
+  (freshPoints||[]).forEach(id=>{ const n = m[id.split('.')[0]]; if(n) nums.add(n); });
+  (freshFacts||[]).forEach(f=>clItems().forEach(it=>{ if((it.quizFacts||[]).includes(f)) nums.add(m[it.id]); }));
+  return [...nums].sort((a,b)=>a-b);
+}
+function flashQuiz(nums){
+  if(!nums || !nums.length) return;
+  nums.forEach(n=>quizSeen.add(n));
+  const el = $('quizFlash'); el.innerHTML = '<small>Quiz</small>'+nums.join(', ');
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  clearTimeout(el._t); el._t = setTimeout(()=>el.classList.remove('show'), 6000);
+}
+function askName(n){
+  nameFor = n; $('nameTitle').textContent = 'Student '+n+', your turn';
+  $('nameInput').value = names[n]||''; $('nameBox').classList.remove('hidden');
+  setTimeout(()=>$('nameInput').focus(), 50);
+}
+function closeName(save){
+  const n = nameFor; if(!n) return;
+  if(save){ const v = $('nameInput').value.trim().replace(/\s+/g,' ').slice(0,30); if(v) names[n] = v; else delete names[n]; }
+  $('nameBox').classList.add('hidden'); nameFor = 0;
+  if(student && student.n===n && vstage!=='done') showCoach('<b>'+esc(whoLabel(n))+':</b> you have '+perTurns()+' turns with '+esc(stageChars()[0].name)+'. '+(vlog.length? 'Look at the checklist and choose something that is still missing.' : 'Say something, or do something and press <b>Do</b>.'));
+  renderVisitTurn(); renderChecklist(); saveSession(); $('question').focus();
+}
 const CALM = ['Very upset','Upset','Unsettled','Calmer','Settled'];
 
 function vStages(){ return (S && S.stages)||[]; }
@@ -481,7 +515,8 @@ function transcriptText(entries){
 }
 function visitBlank(){
   sessionGen++;
-  vstage = (vStages()[0]||{}).id || ''; points = {}; calm = vStage().calmStart || 1; seeText = ''; vlog = []; lastNarration = '';
+  vstage = (vStages()[0]||{}).id || ''; points = {}; calm = vStage().calmStart || 1; seeText = ''; vlog = []; lastNarration = ''; names = {}; quizSeen = new Set();
+  if(nameFor){ nameFor = 0; $('nameBox').classList.add('hidden'); }
   if(isVisit()){ busy = false; setVisitBusy(false); stage = 'questions'; student = newStudent(1, true); student.kinds = []; renderPersona(); }
 }
 
@@ -567,8 +602,10 @@ async function visitAsk(text, kind){
     lastTurns = j.turns; showTurns(j.turns, false); speakTurns(j.turns, narration);
     if(st.calm && j.calm) calm = j.calm;
     seeText = st.calm? (j.see || seeText) : '';
-    (j.facts||[]).forEach(id=>{ if((S.keyFacts||[]).some(f=>f.id===id)) revealed.add(id); });
+    const newFacts = (j.facts||[]).filter(id=>(S.keyFacts||[]).some(f=>f.id===id) && !revealed.has(id));
+    newFacts.forEach(id=>revealed.add(id));
     const fresh = tickPoints(j.points, student.n);
+    flashQuiz(quizNumbersFor(fresh, newFacts));
     if(j.suggested) lastSuggested = j.suggested;
     qCount++;
     student.q++; student.types.push(fresh.length? 'open' : 'said'); student.facts += fresh.length; (student.kinds = student.kinds||[]).push(kind);
@@ -590,7 +627,7 @@ function visitTurnSummary(){
   const kinds = student.kinds||[], said = kinds.filter(k=>k==='say').length, did = kinds.length-said;
   const mine = Object.keys(points).filter(id=>points[id].n===student.n && points[id].stage===vstage);
   const left = missingItems(vstage).length;
-  const parts = ['<b>Student '+student.n+', turn finished.</b> '+said+' said, '+did+' done.'];
+  const parts = ['<b>'+esc(whoLabel(student.n))+', turn finished.</b> '+said+' said, '+did+' done.'];
   parts.push(mine.length? 'You showed: <b>'+esc(mine.map(pointLabel).join(', '))+'</b>.' : 'No new checklist points this time. Next time, choose a point that is still missing.');
   parts.push(left? 'Still to show: '+left+' point'+(left===1?'':'s')+'.' : 'Every point for this part is shown.');
   if(student.lifeline) parts.push('(Lifeline used.)');
@@ -600,7 +637,7 @@ function renderVisitTurn(){
   if(!student){ student = newStudent(1, true); student.kinds = []; }
   const per = perTurns(), started = vlog.length>0 || history.length>0, done = vstage==='done';
   $('btnBegin').classList.add('hidden');
-  $('studentLabel').textContent = done? 'Session finished' : 'Student '+student.n+(!started? '' : student.q>=per? ' · turn finished, press Next student' : ' · turn '+(student.q+1)+' of '+per);
+  $('studentLabel').textContent = done? 'Session finished' : 'Student '+student.n+(names[student.n]? ': '+names[student.n] : '')+(!started? '' : student.q>=per? ' · turn finished, press Next student' : ' · turn '+(student.q+1)+' of '+per);
   const kinds = student.kinds||[], dots = [];
   for(let i=0;i<per;i++){ const ty = student.types[i]; dots.push('<i class="'+(ty? 'done'+(ty==='open'?' open':'') : '')+'" title="'+(ty? (kinds[i]==='do'?'Did something':'Said something')+(ty==='open'?', new checklist point':'') : '')+'"></i>'); }
   $('dots').innerHTML = dots.join('');
@@ -617,7 +654,7 @@ function renderVisitTurn(){
   renderVisitExplore(); renderSee();
 }
 function renderVisitExplore(){
-  if(vstage==='done'){ $('explore').innerHTML = 'Session finished. Press <b>Download session (Word)</b> for the progress notes.'; return; }
+  if(vstage==='done'){ $('explore').innerHTML = 'Session finished. Press <b>Session for students (Word)</b> for the progress notes.'; return; }
   const left = missingItems(vstage);
   $('explore').innerHTML = left.length? 'Still to show: '+left.slice(0,6).map(it=>'<span>'+esc(missingText(it))+'</span>').join('')+(left.length>6? '<span>and '+(left.length-6)+' more on the checklist</span>' : '') : 'Every point is shown. Press <b>'+esc($('btnStage').textContent)+'</b> when you are ready.';
 }
@@ -636,15 +673,18 @@ function renderChecklist(fresh){
   const hasDo = stageItems(vstage).some(it=>it.how || (it.parts||[]).some(p=>p.how));
   const tasks = (vstage!=='done' && (st.tasks||[]).length)? '<details class="cl-tasks" id="clTasks"'+(LS.get('tasksOpen', true)? ' open' : '')+'><summary><b>Your tasks: '+esc(st.title)+'</b></summary><ul>'+st.tasks.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul></details>'
     + (hasDo? '<div class="cl-dohelp"><span class="cl-how">Do</span> means an action. Say or type what you do, starting with "I", for example "I pass her a tissue". Then press <b>Do</b> instead of Say.</div>' : '') : '';
-  $('board').innerHTML = tasks + (S.checklist||[]).map(g=>{
+  const seen = [...quizSeen].sort((a,b)=>a-b);
+  const quizLine = seen.length? '<div class="cl-quizseen">Quiz questions reached so far: <b>'+seen.join(', ')+'</b></div>' : '';
+  const num = itemNumbers();
+  $('board').innerHTML = tasks + quizLine + (S.checklist||[]).map(g=>{
     const gi = order.indexOf(g.stage), later = gi<0 || gi>cur;
     const tag = gi<0? 'After the session' : (gi!==cur? vStages()[gi].title : '');
     const items = (g.items||[]).map(it0=>{
       const it = Object.assign({stage:g.stage}, it0);
       const met = gi>=0 && itemMet(it), isNew = pointIds(it).some(id=>fr.has(id));
-      const ev = pointIds(it).filter(id=>points[id]).map(id=>'Student '+points[id].n+': '+points[id].evidence).join('  |  ');
+      const ev = pointIds(it).filter(id=>points[id]).map(id=>whoShort(points[id].n)+': '+points[id].evidence).join('  |  ');
       const parts = it.parts? ' <span class="cl-parts">'+it.parts.map(p=>{ const ok = !!points[it.id+'.'+p.id]; return '<span class="'+(ok?'met':'')+'">'+(ok?'&#10003; ':'')+esc(p.label)+(p.how? ' <b>'+howText(p.how)+'</b>' : '')+'</span>'; }).join('')+'</span>' : '';
-      return '<div class="cl-item'+(met?' met':'')+(isNew?' new':'')+'"'+(ev? ' title="'+esc(ev)+'"' : '')+'><span class="mark">'+(met?'&#10003;':'&#9675;')+'</span><span>'+esc(it.label)+howChip(it.how)+parts+'</span></div>';
+      return '<div class="cl-item'+(met?' met':'')+(isNew?' new':'')+'"'+(ev? ' title="'+esc(ev)+'"' : '')+'><span class="mark">'+(met?'&#10003;':'&#9675;')+'</span><span class="num">'+num[it.id]+'.</span><span>'+esc(it.label)+howChip(it.how)+parts+'</span></div>';
     }).join('');
     return '<div class="cl-group'+(later?' later':'')+'"><h3><span>'+esc(g.title)+'</span>'+(tag? '<span class="tag">'+esc(tag)+'</span>' : '')+'</h3>'+items+'</div>';
   }).join('');
@@ -668,6 +708,7 @@ function startVisit(){
   lastNarration = st.scene || '';
   speakTurns([], lastNarration);
   renderPersona(); renderVisitTurn(); renderChecklist(); saveSession();
+  askName(1);
 }
 function visitNextStudent(){
   const n = student? student.n+1 : 1;
@@ -675,6 +716,7 @@ function visitNextStudent(){
   if(vstage!=='done') showCoach('<b>Student '+n+':</b> you have '+perTurns()+' turns with '+esc(stageChars()[0].name)+'. Look at the checklist and choose something that is still missing.');
   toast('Student '+n+': your turn.');
   renderVisitTurn(); saveSession();
+  if(vstage!=='done' && (vlog.length || history.length)) askName(n);
 }
 async function reviewStage(fromTeacher){
   // One look over the whole conversation of this part, for points the live check missed.
@@ -689,6 +731,7 @@ async function reviewStage(fromTeacher){
     const raw = await callAPI([{role:'user', content:'CHECKLIST POINTS STILL OPEN:\n'+open.join('\n')+'\n\nTRANSCRIPT:\n'+transcriptText(entries)}], sys);
     if(gen !== sessionGen) return [];   // Reset was pressed while checking
     const fresh = tickPoints(parseVisit(raw).points, student.n);
+    flashQuiz(quizNumbersFor(fresh, []));
     renderChecklist(fresh); saveSession();
     if(fromTeacher){ const left = missingItems(vstage); showCoach(left.length? 'Check finished. Still to show: '+left.map(it=>esc(missingText(it))).join('; ')+'.' : 'Check finished. Every point for this part is shown.'); }
     toast(fresh.length? fresh.length+' more point'+(fresh.length===1?' was':'s were')+' found in the conversation.' : 'No more points found in the conversation.');
@@ -718,7 +761,7 @@ function advanceStage(){
   history = [{role:'user', content:'TEACHER: '+(next.startNote||'The next part begins now.')},{role:'assistant', content: JSON.stringify({turns:opening, coach:'', suggested:'', points:[]})}];
   renderPersona(); lastTurns = opening; lastNarration = next.scene || '';
   showTurns(opening.length? opening : [{speaker:'', text:next.title}]); speakTurns(opening, lastNarration);
-  showCoach('<b>'+esc(next.title)+'.</b> '+esc(next.intro||'')+' Student '+student.n+', carry on.', true);
+  showCoach('<b>'+esc(next.title)+'.</b> '+esc(next.intro||'')+' '+esc(whoLabel(student.n))+', carry on.', true);
   $('question').placeholder = 'What you say to '+c.name+' appears here. You can also type it, then press Say.';
   renderVisitTurn(); renderChecklist(); saveSession();
 }
@@ -726,7 +769,8 @@ function finishVisit(){
   const order = vStages().map(s=>s.id), tracked = clItems().filter(it=>order.includes(it.stage)), got = tracked.filter(itemMet).length;
   lastTurns = [];
   showTurns([{speaker:'', text:'The session is finished. Thank you, everyone.'}]);
-  showCoach('<b>Session finished.</b> The class showed '+got+' of '+tracked.length+' checklist points. Press <b>Download session (Word)</b>. Each student writes the progress note for '+esc(S.docTitle||S.person)+' from it.', true);
+  showCoach('<b>Session finished.</b> The class showed '+got+' of '+tracked.length+' checklist points. Press <b>Session for students (Word)</b>. Each student writes the progress note for '+esc(S.docTitle||S.person)+' from it. Your copy with names: <b>Teacher copy with names (Word)</b>.', true);
+  const m = itemNumbers(); flashQuiz(clItems().filter(it=>it.stage==='after').map(it=>m[it.id]));   // the progress note question
   renderVisitTurn(); renderChecklist(); saveSession();
 }
 const DOC_STYLE = '<style>body{font-family:Calibri,Arial,sans-serif;font-size:12pt}h1{font-size:18pt}h2{font-size:14pt;margin-top:18pt;color:#1b7f79}p{margin:3pt 0}p.see{font-style:italic;color:#555}table{border-collapse:collapse;width:100%}td,th{border:1px solid #444;padding:5pt;vertical-align:top;text-align:left}</style>';
@@ -743,20 +787,46 @@ function visitDocHTML(){
     '<h2>Progress Notes for '+esc(name)+'</h2><table><tr><th style="width:24%">Date &amp; Time</th><th>Progress Note</th></tr><tr><td style="height:320pt">&nbsp;</td><td>&nbsp;</td></tr></table>'+
     '</body></html>';
 }
-function checklistDocHTML(){
-  const order = vStages().map(s=>s.id), tracked = clItems().filter(it=>order.includes(it.stage)), got = tracked.filter(itemMet).length;
+function checklistTableHTML(){
+  const order = vStages().map(s=>s.id), m = itemNumbers();
   const rows = (S.checklist||[]).map(g=>{
     const inPage = order.includes(g.stage);
     return '<tr><td colspan="3" style="background:#dff0ee"><b>'+esc(g.official||g.title)+'</b></td></tr>'+(g.items||[]).map(it0=>{
       const it = Object.assign({stage:g.stage}, it0), met = inPage && itemMet(it);
-      const ev = pointIds(it).filter(id=>points[id]).map(id=>(it.parts? esc(pointLabel(id).split(': ').pop())+': ' : '')+'Student '+points[id].n+', "'+esc(points[id].evidence)+'"').join('<br>');
-      return '<tr><td>'+esc(it.official||it.label)+'</td><td style="width:14%">'+(inPage? (met? 'Shown' : 'Not yet') : 'After the session')+'</td><td style="width:40%">'+ev+'</td></tr>';
+      const ev = pointIds(it).filter(id=>points[id]).map(id=>(it.parts? esc(pointLabel(id).split(': ').pop())+': ' : '')+esc(whoLabel(points[id].n))+', "'+esc(points[id].evidence)+'"').join('<br>');
+      return '<tr><td>'+m[it.id]+'. '+esc(it.official||it.label)+'</td><td style="width:14%">'+(inPage? (met? 'Shown' : 'Not yet') : 'After the session')+'</td><td style="width:40%">'+ev+'</td></tr>';
     }).join('');
   }).join('');
+  return '<table><tr><th>Checklist point (number = quiz question)</th><th>Shown?</th><th>Evidence (student and words)</th></tr>'+rows+'</table>';
+}
+function checklistDocHTML(){
+  const order = vStages().map(s=>s.id), tracked = clItems().filter(it=>order.includes(it.stage)), got = tracked.filter(itemMet).length;
   return '<html><head><meta charset="utf-8"><title>'+esc(S.title)+' checklist</title>'+DOC_STYLE+'</head><body>'+
     '<h1>'+esc(S.title)+': checklist evidence</h1><p>'+esc(S.unit||'')+'<br>Class practice session. Date: '+new Date().toLocaleDateString('en-AU')+'<br>Points shown in the page: '+got+' of '+tracked.length+'.</p>'+
-    '<p>The AI listened for each point during the session and noted the student turn and words. Use this as a guide only. The teacher makes every assessment decision.</p>'+
-    '<table><tr><th>Checklist point</th><th>Shown?</th><th>Evidence (student turn and words)</th></tr>'+rows+'</table></body></html>';
+    (Object.keys(names).length? '<p><b>This copy has student names. Keep it private.</b></p>' : '')+
+    '<p>The AI listened for each point during the session and noted the student and their words. Use this as a guide only. The teacher makes every assessment decision.</p>'+
+    checklistTableHTML()+'</body></html>';
+}
+function visitTeacherDocHTML(){
+  // Teacher copy for marking: who took part, what each student showed, the checklist and the conversation, with names.
+  const m = itemNumbers(), order = vStages().map(s=>s.id), tracked = clItems().filter(it=>order.includes(it.stage)), got = tracked.filter(itemMet).length;
+  const nums = [...new Set(vlog.map(e=>e.n).concat(Object.keys(names).map(Number)))].sort((a,b)=>a-b);
+  const people = nums.map(n=>{
+    const mine = vlog.filter(e=>e.n===n), said = mine.filter(e=>e.kind==='say').length, did = mine.length-said;
+    const pts = Object.keys(points).filter(id=>points[id].n===n).sort((a,b)=>m[a.split('.')[0]]-m[b.split('.')[0]]);
+    return '<tr><td>'+n+'</td><td>'+esc(names[n]||'(no name typed)')+'</td><td>'+said+' said, '+did+' done</td><td>'+(pts.map(id=>m[id.split('.')[0]]+'. '+esc(pointLabel(id))+': <i>"'+esc(points[id].evidence)+'"</i>').join('<br>')||'none')+'</td></tr>';
+  }).join('');
+  const body = vStages().map(st=>{
+    const entries = vlog.filter(e=>e.stage===st.id); if(!entries.length) return '';
+    return '<h3>'+esc(st.title)+'</h3>'+entries.map(e=>'<p><b>'+esc(whoLabel(e.n))+' '+(e.kind==='do'?'does':'says')+':</b> '+esc(e.text)+'</p>'+e.turns.map(t=>'<p><b>'+esc(t.speaker)+':</b> '+esc(t.text)+'</p>').join('')+(e.see? '<p class="see">What you could see: '+esc(e.see)+'</p>' : '')).join('');
+  }).join('');
+  return '<html><head><meta charset="utf-8"><title>'+esc(S.title)+' teacher copy</title>'+DOC_STYLE+'</head><body>'+
+    '<h1>'+esc(S.title)+': teacher copy with student names</h1><p>'+esc(S.unit||'')+'<br>Class practice session. Date: '+new Date().toLocaleDateString('en-AU')+'<br>Checklist points shown: '+got+' of '+tracked.length+'.</p>'+
+    '<p><b>This copy has student names. Keep it private and use it for marking.</b> The students\' copy has no names.</p>'+
+    '<h2>Students</h2><table><tr><th style="width:8%">Turn</th><th style="width:18%">Name</th><th style="width:16%">Said / done</th><th>Checklist points shown (number = quiz question) and their words</th></tr>'+(people||'<tr><td colspan="4">No turns yet.</td></tr>')+'</table>'+
+    '<h2>Checklist</h2>'+checklistTableHTML()+
+    '<h2>What was said and done</h2>'+(body || '<p>(Nothing was said yet.)</p>')+
+    '</body></html>';
 }
 
 // ---------- Speech out ----------
@@ -1020,9 +1090,13 @@ function init(){
   $('btnNext').onclick = nextStudent;
   $('btnLifeline').onclick = useLifeline;
 
-  $('btnExport').onclick = ()=> isVisit()? download(S.id+'-session.doc', visitDocHTML(), 'application/msword') : download(S.id+'-board.doc', boardHTML(), 'application/msword');
+  $('btnExport').onclick = ()=> isVisit()? download(S.id+'-session-students.doc', visitDocHTML(), 'application/msword') : download(S.id+'-board.doc', boardHTML(), 'application/msword');
+  $('btnExportTeacher').onclick = ()=> download(S.id+'-session-teacher-with-names.doc', visitTeacherDocHTML(), 'application/msword');
+  $('btnNameOk').onclick = ()=> closeName(true);
+  $('btnNameSkip').onclick = ()=> closeName(false);
+  $('nameInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); closeName(true); } });
   $('btnPrint').onclick = ()=> window.print();
-  $('btnSave').onclick = ()=> download(S.id+'-session.json', JSON.stringify(Object.assign({scenario:S.id, when:new Date().toISOString(), board, revealed:[...revealed], history}, isVisit()? {vstage, points, vlog} : {}), null, 2), 'application/json');
+  $('btnSave').onclick = ()=> download(S.id+'-session.json', JSON.stringify(Object.assign({scenario:S.id, when:new Date().toISOString(), board, revealed:[...revealed], history}, isVisit()? {vstage, points, vlog, names} : {}), null, 2), 'application/json');
   $('btnDo').onclick = ()=>{ stopListening(); ask($('question').value, {kind:'do'}); };
   $('btnStage').onclick = stageButton;
   $('btnCheckAll').onclick = ()=>{ if(!vlog.length){ toast('Nothing to check yet.'); return; } reviewStage(true); };

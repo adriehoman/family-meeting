@@ -89,7 +89,8 @@ $guide = @"
 <table><tr><th style="width:32%">File</th><th>What it is</th></tr>
 <tr><td>The Family Meeting page</td><td>The same page and address as before: https://adriehoman.github.io/family-meeting/ (PIN 2468). Wilson and Val are unchanged. Cherry is a new scenario: open Settings and choose <b>Cherry Wilkes - Support visit</b>.</td></tr>
 <tr><td>This guide</td><td>Run sheet, how the page works for Cherry, Cherry and Lance, the checklist, risk and protective factors, OPAN, debrief and the quiz answers.</td></tr>
-<tr><td>Cherry_Wilkes_Observer_Quiz.docx</td><td>One per student, printed before class. One question for each of the $total checklist points: circle an answer, true or false, or write a word. Students fill it in as the visit goes, so they keep listening. You mark it afterwards (answers in section 10).</td></tr>
+<tr><td>Cherry_Wilkes_Observer_Quiz.docx</td><td>One per student, printed before class. One question for each of the $total checklist points: tick a box, tick True or False, or write a word. The numbers match the checklist on the screen, and the number flashes in big red when a question is reached. Students fill it in as the visit goes, so they keep listening. You mark it afterwards.</td></tr>
+<tr><td>Cherry_Wilkes_Observer_Quiz_BA.docx</td><td>The Benchmark Answers for marking the quiz: the same questions with the correct boxes ticked and the answers in red.</td></tr>
 <tr><td>Cherry_Wilkes_Student_Hints.docx</td><td>One per student or per pair. Ideas for what to say or do for each checklist point, to use when it is their turn. It shows which points need the Do button.</td></tr>
 </table>
 
@@ -105,10 +106,10 @@ $guide = @"
 
 <h2>3. Class run sheet (60 to 75 minutes)</h2>
 <table><tr><th style="width:14%">Time</th><th>What happens</th><th style="width:34%">You</th></tr>
-<tr><td>5 min</td><td>Set the scene: "You are Cherry's support worker. You visit her three mornings a week. Today at 11am you find her crying in her bedroom. Together, the whole class is one support worker." Hand out the quiz and the hints.</td><td>Explain <b>Say</b> (something you say) and <b>Do</b> (something you do, for example "I sit down next to her"). Show the Do tags on the checklist. Typing is always fine.</td></tr>
-<tr><td>35 to 45 min</td><td>Press <b>Start visit</b>. Each student has 5 turns, then presses <b>Next student</b>. The checklist on the right turns green. "Still to show" and the hints sheet help the next student choose what to do. Everyone fills in the quiz as they listen.</td><td>Watch the key moments in section 5. Use Teacher notes (press T) to whisper to Cherry if the class is stuck.</td></tr>
+<tr><td>5 min</td><td>Set the scene: "You are Cherry's support worker. You visit her three mornings a week. Today at 11am you find her crying in her bedroom. Together, the whole class is one support worker." Hand out the quiz and the hints.</td><td>Show the class the name box: each student types their first name at the start of their turn (or presses Skip). Explain <b>Say</b> (something you say) and <b>Do</b> (something you do, for example "I sit down next to her"). Show the Do tags on the checklist. Typing is always fine.</td></tr>
+<tr><td>35 to 45 min</td><td>Press <b>Start visit</b>. Each student has 5 turns, then presses <b>Next student</b>. The checklist on the right turns green. "Still to show" and the hints sheet help the next student choose what to do. Everyone fills in the quiz as they listen. When a quiz question is reached, its number flashes in big red, and it is added to "Quiz questions reached so far" above the checklist.</td><td>Watch the key moments in section 5. Use Teacher notes (press T) to whisper to Cherry if the class is stuck.</td></tr>
 <tr><td>10 to 15 min</td><td>When every visit point is green, press <b>Go to Lance</b>. Students keep taking turns and report to Lance.</td><td>Listen for the risk and protective factors (section 7).</td></tr>
-<tr><td>5 min</td><td>Press <b>Finish session</b>, then <b>Download session (Word)</b>.</td><td>In Teacher notes press <b>Download checklist with evidence (Word)</b> for your own records.</td></tr>
+<tr><td>5 min</td><td>Press <b>Finish session</b>, then <b>Session for students (Word)</b> for the class (no names).</td><td>Press <b>Teacher copy with names (Word)</b> for your marking. Do this before Reset.</td></tr>
 <tr><td>10 min</td><td>Debrief (section 9). Collect the quizzes.</td><td>Mark the quizzes later with section 10.</td></tr>
 <tr><td>Later</td><td>Each student writes the progress note for Cherry from the session document. It has everything that was said and done, and an empty progress note table.</td><td></td></tr>
 </table>
@@ -126,7 +127,10 @@ $guide = @"
 <tr><td>Go to Lance</td><td>Works only when all 26 visit points are green. If some are missing, the page checks the whole conversation once more, then lists what is still needed. The same happens for <b>Finish session</b> with Lance's 4 points.</td></tr>
 <tr><td>Coach and lifeline</td><td>The coach line names a skill or a missing area, never the words to say. Each student can use the lifeline once to see one idea.</td></tr>
 <tr><td>Teacher notes (T)</td><td>Cue lines, the story facts still hidden, debrief questions, whisper, and the checklist tools: <b>Check the whole conversation again</b>, <b>Move on now (skip the checklist)</b> (press twice, for when the AI clearly missed something), and <b>Download checklist with evidence (Word)</b>.</td></tr>
-<tr><td>Download session (Word)</td><td>Everything said and done with Cherry and Lance, what you could see, and an empty progress note table.</td></tr>
+<tr><td>Name box</td><td>Appears at the start of each turn. The student types their first name, or presses Skip. The name shows on the screen and in the teacher copy only. It is never sent to the AI or read aloud, and Reset clears it.</td></tr>
+<tr><td>Quiz numbers</td><td>Each checklist point has a number that matches the Observer Quiz and the hints sheet. When a point is shown, or Cherry says something a quiz question asks about (for example the missing swan), the number flashes in big red for a few seconds. "Quiz questions reached so far" above the checklist keeps the list for anyone who missed it.</td></tr>
+<tr><td>Session for students (Word)</td><td>Everything said and done with Cherry and Lance, what you could see, and an empty progress note table. No student names.</td></tr>
+<tr><td>Teacher copy with names (Word)</td><td>For your marking: a table of students with what each one said and did and which checklist points they showed (the numbers match the quiz), the checklist with evidence, and the whole conversation with names. Keep it private.</td></tr>
 <tr><td>Reset</td><td>Press twice. Clears the conversation and the checklist, even while Cherry is still answering.</td></tr>
 </table>
 <p><b>Points that need the Do button:</b></p>
@@ -172,6 +176,7 @@ $($rows.ToString())
 <h3>Debrief questions</h3><ul>$debrief</ul>
 
 <h2>10. Observer Quiz answers</h2>
+<p>The full Benchmark Answers are in <b>Cherry_Wilkes_Observer_Quiz_BA.docx</b>. The quick key is below.</p>
 <p>One mark per question, $total marks. For "write" questions, accept the student's own words when the meaning is right. Some answers depend on what happened in your session (for example the service the class chose).</p>
 <table><tr><th>#</th><th>Checklist point</th><th>Answer</th></tr>
 $keyRows
@@ -180,10 +185,11 @@ $keyRows
 <h2>11. Cost, privacy and problems</h2>
 <ul>
 <li>Cherry sends more notes to the AI than Wilson, so each turn costs a little more, roughly 3 to 4 cents with Sonnet. A full class session costs a few dollars. Keep the monthly limit in the Anthropic Console.</li>
-<li>Do not say or type student names. The page calls them Student 1, Student 2 and so on.</li>
+<li>Students type only their first name, in the name box. Those names stay in this browser: they are never sent to the AI or read aloud, and Reset clears them. Do not say or type student names in questions, because questions go to the AI.</li>
+<li>The teacher copy has names. Store it like any other marking record.</li>
 <li>If the AI misses a point the class clearly showed: Teacher notes, <b>Check the whole conversation again</b>. If it is still missing, <b>Move on now</b>.</li>
 <li>If the internet or the API fails, you can play Cherry yourself from section 5 and use the printed checklist.</li>
-<li>Reset (press twice) clears the session before the next class. Download the session first.</li>
+<li>Reset (press twice) clears the session and the names before the next class. Download both copies first.</li>
 </ul>
 </body></html>
 "@
@@ -195,12 +201,12 @@ foreach ($g in $sc.checklist) {
   [void]$quizBody.Append('<h2>' + (HtmlText $g.title) + (StageNote $g) + '</h2>')
   foreach ($p in ($points | Where-Object { $_.group -eq $g })) {
     $q = $extra.quiz.($p.item.id)
-    $tag = switch ($q.type) { 'choice' { 'Circle a, b or c' } 'tf' { 'Circle True or False' } default { 'Write' } }
+    $tag = switch ($q.type) { 'choice' { 'Tick one box' } 'tf' { 'Tick True or False' } default { 'Write' } }
     [void]$quizBody.Append('<p class="q">' + $p.n + '. ' + (HtmlText $(if ($q.q) { $q.q } else { $p.item.label })) + '</p>')
     [void]$quizBody.Append('<p class="pt">Checklist point: ' + (HtmlText $p.item.label) + '. ' + $tag + '.</p>')
     if ($q.parts) { foreach ($part in $q.parts) { [void]$quizBody.Append('<p class="opt">' + (HtmlText $part.q) + '</p>') } }
-    elseif ($q.type -eq 'choice') { $letters = 'a','b','c'; for ($i = 0; $i -lt $q.options.Count; $i++) { [void]$quizBody.Append('<p class="opt">' + $letters[$i] + ') ' + (HtmlText $q.options[$i]) + '</p>') } }
-    elseif ($q.type -eq 'tf') { [void]$quizBody.Append('<p class="opt">True&nbsp;&nbsp;&nbsp;/&nbsp;&nbsp;&nbsp;False</p>') }
+    elseif ($q.type -eq 'choice') { $letters = 'a','b','c'; for ($i = 0; $i -lt $q.options.Count; $i++) { [void]$quizBody.Append('<p class="opt">&#9744;&nbsp; ' + $letters[$i] + ') ' + (HtmlText $q.options[$i]) + '</p>') } }
+    elseif ($q.type -eq 'tf') { [void]$quizBody.Append('<p class="opt">&#9744;&nbsp; True&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#9744;&nbsp; False</p>') }
     elseif ($q.q -notmatch '_{4,}') { [void]$quizBody.Append('<p class="opt">______________________________________________</p>') }   # a write question with no gap gets an answer line
   }
 }
@@ -211,6 +217,44 @@ $quiz = @"
 <p class="box">Listen to Cherry and Lance, and watch what the support worker says and does. Answer each question when you hear or see the answer. There is one question for each point on the checklist. The numbers match the checklist on the screen and your hints sheet.</p>
 $($quizBody.ToString())
 <p style="margin-top:12pt"><b>Score: ______ of $total</b></p>
+</body></html>
+"@
+
+# ---------- Benchmark Answers (BA) for marking the quiz ----------
+$ansStyle = 'color:#C00000;background:#FFFF00;font-weight:bold'
+$baBody = New-Object System.Text.StringBuilder
+foreach ($g in $sc.checklist) {
+  [void]$baBody.Append('<h2>' + (HtmlText $g.title) + (StageNote $g) + '</h2>')
+  foreach ($p in ($points | Where-Object { $_.group -eq $g })) {
+    $q = $extra.quiz.($p.item.id)
+    [void]$baBody.Append('<p class="q">' + $p.n + '. ' + (HtmlText $(if ($q.q) { $q.q } else { $p.item.label })) + '</p>')
+    [void]$baBody.Append('<p class="pt">Checklist point: ' + (HtmlText $p.item.official) + '</p>')
+    if ($q.parts) { foreach ($part in $q.parts) { [void]$baBody.Append('<p class="opt">' + (HtmlText $part.q) + '<br><span style="' + $ansStyle + '">' + (HtmlText $part.key) + '</span></p>') } }
+    elseif ($q.type -eq 'choice') {
+      $letters = 'a','b','c'
+      for ($i = 0; $i -lt $q.options.Count; $i++) {
+        $line = $letters[$i] + ') ' + (HtmlText $q.options[$i])
+        if ($letters[$i] -eq $q.key) { [void]$baBody.Append('<p class="opt"><span style="' + $ansStyle + '">&#9746;&nbsp; ' + $line + '</span></p>') }
+        else { [void]$baBody.Append('<p class="opt">&#9744;&nbsp; ' + $line + '</p>') }
+      }
+    }
+    elseif ($q.type -eq 'tf') {
+      $tt = if ($q.key -eq 'True') { '<span style="' + $ansStyle + '">&#9746;&nbsp; True</span>' } else { '&#9744;&nbsp; True' }
+      $ff = if ($q.key -eq 'False') { '<span style="' + $ansStyle + '">&#9746;&nbsp; False</span>' } else { '&#9744;&nbsp; False' }
+      [void]$baBody.Append('<p class="opt">' + $tt + '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + $ff + '</p>')
+    }
+    else { [void]$baBody.Append('<p class="opt"><span style="' + $ansStyle + '">' + (HtmlText $q.key) + '</span></p>') }
+  }
+}
+$ba = @"
+<html><head><meta charset="utf-8"><title>Cherry Wilkes Observer Quiz BA</title>$style</head><body>
+<h1>Cherry Wilkes: Observer Quiz. Benchmark Answers (BA)</h1>
+<p>$(HtmlText $sc.unit). Assessment Task 2, Part 2 Role Play 3 (Cherry) preparation.</p>
+<p class="box"><b>For the assessor only. Do not give to students.</b><br>
+One mark per question: $total marks. The correct answers are in red. For write questions, accept the student's own words when the meaning is right.<br>
+Some answers depend on what happened in your session: the time of the Minister's appointment, the support service the class chose and its number. Check these against the Teacher copy with names (Word) from the page.</p>
+$($baBody.ToString())
+<p style="margin-top:12pt"><b>Total: ______ of $total</b></p>
 </body></html>
 "@
 
@@ -245,8 +289,23 @@ New-Item -ItemType Directory -Force $OutDir | Out-Null
 $word = New-Object -ComObject Word.Application
 $word.Visible = $false
 $word.DisplayAlerts = 0   # no dialogs: a hidden dialog would stop the script
+function Add-CheckBoxes([string]$path) {
+  # Turns each printed box into a Word tick box (content control): it still prints as a box, and can be ticked on screen.
+  $doc = $word.Documents.Open($path, $false, $false, $false)
+  try {
+    $box = [char]0x2610; $text = $doc.Content.Text; $made = 0; $want = 0
+    for ($i = $text.Length - 1; $i -ge 0; $i--) {
+      if ($text[$i] -ne $box) { continue }
+      $want++
+      $r = $doc.Range($i, $i + 1)
+      if ($r.Text -eq [string]$box) { $r.Text = ''; [void]$doc.ContentControls.Add(8, $r); $made++ }
+    }
+    $doc.Save()
+    return "$made of $want boxes made tickable"
+  } finally { $doc.Close($false) }
+}
 try {
-  foreach ($d in @(@{name='Cherry_Wilkes_Teacher_Guide'; html=$guide}, @{name='Cherry_Wilkes_Observer_Quiz'; html=$quiz}, @{name='Cherry_Wilkes_Student_Hints'; html=$hints})) {
+  foreach ($d in @(@{name='Cherry_Wilkes_Teacher_Guide'; html=$guide}, @{name='Cherry_Wilkes_Observer_Quiz'; html=$quiz}, @{name='Cherry_Wilkes_Observer_Quiz_BA'; html=$ba}, @{name='Cherry_Wilkes_Student_Hints'; html=$hints})) {
     # Paths must be plain [string]s: Word does not understand the wrapped value Join-Path returns, and waits on a hidden dialog.
     [string]$h = [IO.Path]::Combine($OutDir, $d.name + '.html')
     [IO.File]::WriteAllText($h, $d.html, (New-Object System.Text.UTF8Encoding($true)))   # with BOM, so Word does not ask about the encoding
@@ -257,5 +316,6 @@ try {
     'saved ' + $out
     $doc.Close($false)
     Remove-Item $h
+    if ($d.name -eq 'Cherry_Wilkes_Observer_Quiz') { '  ' + (Add-CheckBoxes $out) }
   }
 } finally { $word.Quit() }

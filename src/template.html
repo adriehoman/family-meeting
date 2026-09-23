@@ -124,6 +124,12 @@
   .cl-how{display:inline-block;font-size:.72rem;line-height:1.5;margin-left:6px;padding:0 7px;border-radius:999px;background:#e9dcc0;color:#6b5423;font-weight:700;vertical-align:1px;white-space:nowrap}
   .cl-dohelp{font-size:.9rem;color:var(--muted);margin:-4px 0 10px;padding:0 4px}
   .cl-dohelp .cl-how{margin-left:0}
+  .cl-item .num{flex:none;min-width:1.7em;text-align:right;color:var(--muted);font-weight:700}
+  .cl-quizseen{font-size:.95rem;margin:0 0 8px;padding:6px 10px;border-radius:10px;background:#fdecec;color:#8a1c1c}
+  .quizflash{display:none;position:fixed;top:86px;right:28px;z-index:35;background:#fff;border:6px solid #d11a1a;color:#d11a1a;font-weight:900;font-size:4.6rem;line-height:1;padding:12px 28px 16px;border-radius:22px;box-shadow:0 12px 40px rgba(209,26,26,.35);text-align:center;pointer-events:none}
+  .quizflash small{display:block;font-size:1.25rem;letter-spacing:3px;text-transform:uppercase;margin-bottom:4px}
+  .quizflash.show{display:block;animation:qflash .9s ease-in-out 4}
+  @keyframes qflash{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
 
   /* Drawers and modals */
   .drawer{position:fixed;left:0;right:0;bottom:0;background:#fffdf7;border-top:3px solid var(--accent);box-shadow:0 -8px 30px rgba(0,0,0,.15);max-height:55vh;overflow:auto;padding:14px 22px;font-size:.98rem;transform:translateY(100%);transition:transform .25s;z-index:20}
@@ -213,6 +219,7 @@
     <div class="board" id="board"></div>
     <div class="boardfoot">
       <button id="btnExport">Download board (Word)</button>
+      <button id="btnExportTeacher" class="hidden" title="For the teacher only: the session with student names, for marking">Teacher copy with names (Word)</button>
       <button id="btnPrint" class="ghost">Print</button>
       <button id="btnSave" class="ghost">Save session file</button>
       <span style="flex:1"></span>
@@ -267,7 +274,7 @@
     <div class="field">
       <label for="apiKey">Anthropic API key</label>
       <input id="apiKey" type="password" placeholder="sk-ant-...">
-      <div class="hint">Stored only in this browser on this laptop. Use a separate key with a low monthly spend limit. Never enter student names into this page.</div>
+      <div class="hint">Stored only in this browser on this laptop. Use a separate key with a low monthly spend limit. Do not put student names in questions: questions go to the AI. Names typed in the Cherry name box stay in this browser and are never sent to the AI.</div>
     </div>
 
     <div class="field">
@@ -360,15 +367,16 @@
     </ol>
     <h3>Support visit scenarios (Cherry Wilkes)</h3>
     <ol>
-      <li><b>Start visit.</b> Cherry is crying in her bedroom. The whole class is one support worker. Each student has 5 turns.</li>
+      <li><b>Start visit.</b> Cherry is crying in her bedroom. The whole class is one support worker. Each student has 5 turns and types their first name at the start of their turn (or presses Skip).</li>
       <li><b>Say or Do.</b> Speak or type, then press <b>Say</b>. For an action (sit down, pass a tissue, give a brochure, dial a number), say or type what you do, then press <b>Do</b>.</li>
       <li><b>The checklist</b> on the right turns green as the class shows each point. "Still to show" under the coach line helps the next student choose. The box above the answer shows what you can see, and how upset Cherry is.</li>
       <li><b>Go to Lance</b> works only when every point for the visit is green. If points are missing, the page checks the whole conversation once more, then lists what is still needed. Teacher notes has "Move on now" if the AI clearly missed something.</li>
-      <li><b>Report to Lance</b>, then <b>Finish session</b>. Press <b>Download session (Word)</b>: it has everything that was said and done, and an empty progress note table for each student.</li>
+      <li><b>Quiz numbers.</b> Each checklist point has a number that matches the Observer Quiz. When a point is shown, or Cherry says something a quiz question asks about, the number flashes in big red, and it is added to "Quiz questions reached so far".</li>
+      <li><b>Report to Lance</b>, then <b>Finish session</b>. <b>Session for students (Word)</b> has everything that was said and done, with no names, and an empty progress note table. <b>Teacher copy with names (Word)</b> shows who said and did what, and which checklist points each student showed. Download it before you press Reset.</li>
     </ol>
     <p><b>Narrator and the microphone button:</b> a narrator with a different voice reads out what the back of the room cannot see: the scene, "What you can see", and any question or action that was typed instead of spoken. While the narrator or a character is speaking, the microphone button is grey and says "Please wait...". Turn the narrator off or choose its voice in Settings.</p>
     <p><b>If something fails:</b> the internet or microphone can drop out. Typing still works without a microphone. If the API fails, you have the printed case notes and can play Rosie yourself.</p>
-    <p><b>Privacy:</b> do not say or type student names. Questions go to Anthropic's API under your key. Nothing is stored anywhere except this browser.</p>
+    <p><b>Privacy:</b> do not say or type student names in questions or answers. Questions go to Anthropic's API under your key. The Cherry name box is different: those names stay in this browser, appear only on the screen and in the teacher copy, are never sent to the AI or read aloud, and are cleared by Reset. Nothing is stored anywhere except this browser.</p>
     <div class="row" style="justify-content:flex-end"><button class="primary" id="btnHelpClose" style="flex:0">Close</button></div>
   </div>
 </div>
@@ -382,6 +390,19 @@
     <div class="hint" id="gateMsg" style="color:var(--warn);margin-top:8px;min-height:1.2em"></div>
   </div>
 </div>
+<!-- Name box: shown at the start of each student's turn in a support visit -->
+<div class="modal hidden" id="nameBox">
+  <div class="box" style="max-width:480px;text-align:center">
+    <h2 id="nameTitle">Student 1, your turn</h2>
+    <p>Type your first name. It stays on this computer and is not sent to the AI.</p>
+    <input id="nameInput" autocomplete="off" maxlength="30" placeholder="First name" style="font-size:1.3rem;text-align:center">
+    <div class="row" style="margin-top:14px">
+      <button class="ghost" id="btnNameSkip">Skip</button>
+      <button class="primary" id="btnNameOk">Start my turn</button>
+    </div>
+  </div>
+</div>
+<div class="quizflash" id="quizFlash" aria-live="polite"></div>
 <div class="toast" id="toast"></div>
 
 <script>
