@@ -15,8 +15,9 @@ Live page: https://adriehoman.github.io/family-meeting/ (PIN protected).
 | `src/portraits.js` | Drawn portraits (olderWoman, olderMan, man, woman). Users can upload their own pictures in Settings. |
 | `src/build.py` | Assembles the page: `python3 build.py [PIN]`. |
 | `src/guide.js`, `src/checklist.js` | Node scripts (need the `docx` package) that produce the teacher guide and the student listening checklist. |
-| `src/cherry-docs.ps1` | PowerShell script (needs Microsoft Word) that produces the Cherry Wilkes teacher guide and observer quiz. The checklist table is read from `scenarios.js`. |
-| `docs/` | The current Word guides, the listening checklist and the Cherry observer quiz. |
+| `src/cherry-docs.ps1` | PowerShell script (needs Microsoft Word; run it directly with `& .\cherry-docs.ps1`) that produces the Cherry Wilkes teacher guide, observer quiz and student hints. The checklist is read from `scenarios.js`. |
+| `src/cherry-quiz-hints.json` | One quiz question (circle, true or false, or write a word) and the say-or-do hints for each Cherry checklist point, keyed by point id. |
+| `docs/` | The current Word guides, the listening checklist, and the Cherry observer quiz and student hints. |
 
 ## Two kinds of scenario
 - **Family meeting** (Wilson Blue, Val Theeson): the AI plays family members on a video call. Opening checks, then each student asks their questions. Facts go on the six-heading board.
@@ -24,6 +25,8 @@ Live page: https://adriehoman.github.io/family-meeting/ (PIN protected).
 
 ## How it works
 The browser calls the Anthropic API directly with a key the teacher enters once in Settings (stored only in that browser). Each answer comes back as JSON: the family's spoken turns, the question type, a coaching line, a suggested question for the lifeline, board points tagged with key fact ids, and which opening checks were covered. Stage 1 is the opening (introduce, purpose, hearing, comfort, privacy); each later student introduces themselves, then asks their questions. Nothing reaches the board until the student has been introduced.
+
+Speech uses the browser's voices. A narrator with a different voice reads out what the back of the room cannot see: the opening message or scene, "What you can see" in a support visit, and any question or action that was typed instead of spoken. While anyone is speaking (or the AI is thinking), the microphone button is grey and says "Please wait...".
 
 ## Adding a scenario for another unit
 1. Copy the Wilson block in `src/scenarios.js` (or download the JSON from Settings).
