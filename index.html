@@ -124,6 +124,12 @@
   .cl-how{display:inline-block;font-size:.72rem;line-height:1.5;margin-left:6px;padding:0 7px;border-radius:999px;background:#e9dcc0;color:#6b5423;font-weight:700;vertical-align:1px;white-space:nowrap}
   .cl-dohelp{font-size:.9rem;color:var(--muted);margin:-4px 0 10px;padding:0 4px}
   .cl-dohelp .cl-how{margin-left:0}
+  .cl-item .num{flex:none;min-width:1.7em;text-align:right;color:var(--muted);font-weight:700}
+  .cl-quizseen{font-size:.95rem;margin:0 0 8px;padding:6px 10px;border-radius:10px;background:#fdecec;color:#8a1c1c}
+  .quizflash{display:none;position:fixed;top:86px;right:28px;z-index:35;background:#fff;border:6px solid #d11a1a;color:#d11a1a;font-weight:900;font-size:4.6rem;line-height:1;padding:12px 28px 16px;border-radius:22px;box-shadow:0 12px 40px rgba(209,26,26,.35);text-align:center;pointer-events:none}
+  .quizflash small{display:block;font-size:1.25rem;letter-spacing:3px;text-transform:uppercase;margin-bottom:4px}
+  .quizflash.show{display:block;animation:qflash .9s ease-in-out 4}
+  @keyframes qflash{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
 
   /* Drawers and modals */
   .drawer{position:fixed;left:0;right:0;bottom:0;background:#fffdf7;border-top:3px solid var(--accent);box-shadow:0 -8px 30px rgba(0,0,0,.15);max-height:55vh;overflow:auto;padding:14px 22px;font-size:.98rem;transform:translateY(100%);transition:transform .25s;z-index:20}
@@ -213,6 +219,7 @@
     <div class="board" id="board"></div>
     <div class="boardfoot">
       <button id="btnExport">Download board (Word)</button>
+      <button id="btnExportTeacher" class="hidden" title="For the teacher only: the session with student names, for marking">Teacher copy with names (Word)</button>
       <button id="btnPrint" class="ghost">Print</button>
       <button id="btnSave" class="ghost">Save session file</button>
       <span style="flex:1"></span>
@@ -267,7 +274,7 @@
     <div class="field">
       <label for="apiKey">Anthropic API key</label>
       <input id="apiKey" type="password" placeholder="sk-ant-...">
-      <div class="hint">Stored only in this browser on this laptop. Use a separate key with a low monthly spend limit. Never enter student names into this page.</div>
+      <div class="hint">Stored only in this browser on this laptop. Use a separate key with a low monthly spend limit. Do not put student names in questions: questions go to the AI. Names typed in the Cherry name box stay in this browser and are never sent to the AI.</div>
     </div>
 
     <div class="field">
@@ -360,15 +367,16 @@
     </ol>
     <h3>Support visit scenarios (Cherry Wilkes)</h3>
     <ol>
-      <li><b>Start visit.</b> Cherry is crying in her bedroom. The whole class is one support worker. Each student has 5 turns.</li>
+      <li><b>Start visit.</b> Cherry is crying in her bedroom. The whole class is one support worker. Each student has 5 turns and types their first name at the start of their turn (or presses Skip).</li>
       <li><b>Say or Do.</b> Speak or type, then press <b>Say</b>. For an action (sit down, pass a tissue, give a brochure, dial a number), say or type what you do, then press <b>Do</b>.</li>
       <li><b>The checklist</b> on the right turns green as the class shows each point. "Still to show" under the coach line helps the next student choose. The box above the answer shows what you can see, and how upset Cherry is.</li>
       <li><b>Go to Lance</b> works only when every point for the visit is green. If points are missing, the page checks the whole conversation once more, then lists what is still needed. Teacher notes has "Move on now" if the AI clearly missed something.</li>
-      <li><b>Report to Lance</b>, then <b>Finish session</b>. Press <b>Download session (Word)</b>: it has everything that was said and done, and an empty progress note table for each student.</li>
+      <li><b>Quiz numbers.</b> Each checklist point has a number that matches the Observer Quiz. When a point is shown, or Cherry says something a quiz question asks about, the number flashes in big red, and it is added to "Quiz questions reached so far".</li>
+      <li><b>Report to Lance</b>, then <b>Finish session</b>. <b>Session for students (Word)</b> has everything that was said and done, with no names, and an empty progress note table. <b>Teacher copy with names (Word)</b> shows who said and did what, and which checklist points each student showed. Download it before you press Reset.</li>
     </ol>
     <p><b>Narrator and the microphone button:</b> a narrator with a different voice reads out what the back of the room cannot see: the scene, "What you can see", and any question or action that was typed instead of spoken. While the narrator or a character is speaking, the microphone button is grey and says "Please wait...". Turn the narrator off or choose its voice in Settings.</p>
     <p><b>If something fails:</b> the internet or microphone can drop out. Typing still works without a microphone. If the API fails, you have the printed case notes and can play Rosie yourself.</p>
-    <p><b>Privacy:</b> do not say or type student names. Questions go to Anthropic's API under your key. Nothing is stored anywhere except this browser.</p>
+    <p><b>Privacy:</b> do not say or type student names in questions or answers. Questions go to Anthropic's API under your key. The Cherry name box is different: those names stay in this browser, appear only on the screen and in the teacher copy, are never sent to the AI or read aloud, and are cleared by Reset. Nothing is stored anywhere except this browser.</p>
     <div class="row" style="justify-content:flex-end"><button class="primary" id="btnHelpClose" style="flex:0">Close</button></div>
   </div>
 </div>
@@ -382,6 +390,19 @@
     <div class="hint" id="gateMsg" style="color:var(--warn);margin-top:8px;min-height:1.2em"></div>
   </div>
 </div>
+<!-- Name box: shown at the start of each student's turn in a support visit -->
+<div class="modal hidden" id="nameBox">
+  <div class="box" style="max-width:480px;text-align:center">
+    <h2 id="nameTitle">Student 1, your turn</h2>
+    <p>Type your first name. It stays on this computer and is not sent to the AI.</p>
+    <input id="nameInput" autocomplete="off" maxlength="30" placeholder="First name" style="font-size:1.3rem;text-align:center">
+    <div class="row" style="margin-top:14px">
+      <button class="ghost" id="btnNameSkip">Skip</button>
+      <button class="primary" id="btnNameOk">Start my turn</button>
+    </div>
+  </div>
+</div>
+<div class="quizflash" id="quizFlash" aria-live="polite"></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -775,14 +796,14 @@ window.BUILTIN_SCENARIOS = [
   ],
   "checklist": [
     {"id": "g1", "stage": "cherry", "title": "Communicate with respect", "official": "Use communication techniques that were respectful and met the person's communication needs including:", "items": [
-      {"id": "listen", "label": "Active listening", "how": "both", "official": "Active listening", "hint": "shows they heard Cherry: repeats back or sums up what she said, names her feeling, follows up on something she said, or gives her quiet time to speak"},
-      {"id": "touch", "label": "Reassure her, and use touch the way she likes it", "how": "both", "official": "Appropriate reassurance and use of touch that meets the person's preferences", "hint": "gives calm reassurance AND asks before touching, or offers touch the way Cherry likes it (for example asks if she would like her hand held). A hug without asking does not count"},
+      {"id": "listen", "label": "Active listening", "quizFacts": ["swan"], "how": "both", "official": "Active listening", "hint": "shows they heard Cherry: repeats back or sums up what she said, names her feeling, follows up on something she said, or gives her quiet time to speak"},
+      {"id": "touch", "label": "Reassure her, and use touch the way she likes it", "quizFacts": ["touch"], "how": "both", "official": "Appropriate reassurance and use of touch that meets the person's preferences", "hint": "gives calm reassurance AND asks before touching, or offers touch the way Cherry likes it (for example asks if she would like her hand held). A hug without asking does not count"},
       {"id": "esteem", "label": "Build her self-esteem and confidence", "official": "Promote self-esteem and confidence", "hint": "praises or values something about Cherry: that she did the right thing telling, that she is brave, what she knows or can do"},
       {"id": "empathy", "label": "Show empathy, no judging", "official": "Empathy, consideration, non-judgemental, non-discriminatory", "hint": "shows they understand how she feels (grief, worry) and does not judge Cherry or Donna"},
       {"id": "positive", "label": "Use positive, supportive words", "official": "Positive and supportive language", "hint": "uses warm, hopeful, supportive words, for example 'we can work this out together'"}
     ]},
     {"id": "g2", "stage": "cherry", "title": "Find out what matters to her", "official": "Through consultation and discussion with the person identify the person's social, cultural and spiritual preferences", "items": [
-      {"id": "prefs", "label": "Ask about her social, cultural and spiritual life", "official": "Through consultation and discussion with the person identify the person's social, cultural and spiritual preferences", "parts": [
+      {"id": "prefs", "label": "Ask about her social, cultural and spiritual life", "quizFacts": ["joan", "culture", "church"], "official": "Through consultation and discussion with the person identify the person's social, cultural and spiritual preferences", "parts": [
         {"id": "social", "label": "social", "hint": "asks about her friends, family, activities or who she spends time with"},
         {"id": "cultural", "label": "cultural", "hint": "asks about her culture, background, traditions or customs"},
         {"id": "spiritual", "label": "spiritual", "hint": "asks about her faith, church, beliefs or what gives her comfort"}
@@ -790,15 +811,15 @@ window.BUILTIN_SCENARIOS = [
     ]},
     {"id": "g3", "stage": "cherry", "title": "Talk with her in a way that...", "official": "Participate in a discussion with the person which:", "items": [
       {"id": "respect", "label": "Respects her social, cultural and spiritual wishes", "official": "Acknowledges and respects the person's social, cultural and spiritual preferences", "hint": "responds with respect to what matters to her: her faith, the Minister, church, her Mum's memory, her ornaments"},
-      {"id": "needs", "label": "Thinks about her needs, stage of life and strengths", "how": "both", "official": "Considers the person's individual needs, stage of life, development, strengths", "hint": "adjusts to Cherry as a person: for example offers help with the phone buttons because of her shaky hands, thinks about her walking frame or balance, speaks slowly and simply while she is upset, or links support to her age, her grief or what she can do"},
-      {"id": "money", "label": "Gently checks the money worry and signs of abuse", "official": "Tactfully confirms any financial issues and indicators of abuse", "hint": "asks open, gentle questions to confirm what is happening with the ornaments or money (what she thinks happened, how many are gone, who might have taken them) without accusing Donna"},
-      {"id": "unmet", "label": "Notices needs that are not being met", "how": "both", "official": "Recognises signs of unmet or additional needs", "hint": "notices or asks about unmet needs: no breakfast, no sleep, still in dressing gown, not going to church, needs help with the phone"},
+      {"id": "needs", "label": "Thinks about her needs, stage of life and strengths", "quizFacts": ["disability"], "how": "both", "official": "Considers the person's individual needs, stage of life, development, strengths", "hint": "adjusts to Cherry as a person: for example offers help with the phone buttons because of her shaky hands, thinks about her walking frame or balance, speaks slowly and simply while she is upset, or links support to her age, her grief or what she can do"},
+      {"id": "money", "label": "Gently checks the money worry and signs of abuse", "quizFacts": ["donna", "parcels"], "official": "Tactfully confirms any financial issues and indicators of abuse", "hint": "asks open, gentle questions to confirm what is happening with the ornaments or money (what she thinks happened, how many are gone, who might have taken them) without accusing Donna"},
+      {"id": "unmet", "label": "Notices needs that are not being met", "quizFacts": ["nosleep"], "how": "both", "official": "Recognises signs of unmet or additional needs", "hint": "notices or asks about unmet needs: no breakfast, no sleep, still in dressing gown, not going to church, needs help with the phone"},
       {"id": "selfdet", "label": "Lets her make her own choices", "official": "Supports the person's self determination", "hint": "asks what Cherry wants, offers choices, and respects her decisions"}
     ]},
     {"id": "g4", "stage": "cherry", "title": "Support her in a way that...", "official": "Provide support in a manner that:", "items": [
       {"id": "pcentred", "label": "Is person-centred, strengths-based and rights-based", "official": "Is person-centred, strength's-based, and rights-based", "hint": "keeps Cherry at the centre: her wishes, her strengths and her rights (for example her right to be safe and to decide)"},
       {"id": "risk", "label": "Respects her right to take risks (dignity of risk)", "official": "Supports a person's dignity of risk", "hint": "respects Cherry's right to make her own decisions even if they carry some risk (for example not going to the police or not confronting Donna yet), while giving her information"},
-      {"id": "privacy", "label": "Keeps her dignity, privacy and confidentiality", "official": "Maintains a person's dignity, privacy and confidentiality", "hint": "protects her dignity and privacy and explains honestly who will be told and why (only the supervisor, need to know)"},
+      {"id": "privacy", "label": "Keeps her dignity, privacy and confidentiality", "quizFacts": ["regret"], "official": "Maintains a person's dignity, privacy and confidentiality", "hint": "protects her dignity and privacy and explains honestly who will be told and why (only the supervisor, need to know)"},
       {"id": "duty", "label": "Meets your duty of care", "official": "Meets the support workers duty of care", "hint": "takes the concern seriously for her safety: does not promise to keep it secret, tells her it must go to the supervisor, checks she is safe and has what she needs"}
     ]},
     {"id": "g5", "stage": "cherry", "title": "Give information and help", "official": "Provide information and assistance to the person in order to:", "items": [
@@ -810,17 +831,17 @@ window.BUILTIN_SCENARIOS = [
       {"id": "selfmanage", "label": "Help her do what she can herself", "how": "both", "official": "Self-manage their own service delivery where able", "hint": "encourages Cherry to make her own calls and decisions about services, helping only where needed (for example she talks, the worker presses the buttons)"}
     ]},
     {"id": "g6", "stage": "cherry", "title": "Strengths and independence", "official": "Promote and facilitate opportunities for participation in activities that reflect the person's individual, physical, social, cultural and spiritual needs, using existing and potential new networks:", "items": [
-      {"id": "strengths", "label": "Help her name her own strengths", "official": "Facilitate and encourage the person to identify own strengths, and to build on strengths to maintain independence", "hint": "asks Cherry what she is good at, enjoys, or what has helped her in hard times before (for example her singing, her faith, knowing the stories of her ornaments), and encourages her to use it. Daily self-care (showering, dressing, breakfast) belongs to selfcare, not here"},
-      {"id": "selfcare", "label": "Help her see what she can still do for herself", "official": "Facilitate and encourage the person to identify self-care capacity, and to build on abilities to maintain independence", "hint": "asks about or encourages what Cherry can do for herself (shower, dress, make breakfast) and to keep doing it"},
+      {"id": "strengths", "label": "Help her name her own strengths", "quizFacts": ["strengths"], "official": "Facilitate and encourage the person to identify own strengths, and to build on strengths to maintain independence", "hint": "asks Cherry what she is good at, enjoys, or what has helped her in hard times before (for example her singing, her faith, knowing the stories of her ornaments), and encourages her to use it. Daily self-care (showering, dressing, breakfast) belongs to selfcare, not here"},
+      {"id": "selfcare", "label": "Help her see what she can still do for herself", "quizFacts": ["strengths"], "official": "Facilitate and encourage the person to identify self-care capacity, and to build on abilities to maintain independence", "hint": "asks about or encourages what Cherry can do for herself (shower, dress, make breakfast) and to keep doing it"},
       {"id": "values", "label": "Do not push your own values", "official": "Avoid imposing own values and attitudes", "hint": "does not tell Cherry what she should believe or do about Donna, church or the police; offers options and clearly leaves the decision to her"}
     ]},
     {"id": "g7", "stage": "cherry", "title": "Notice what is happening", "official": "Recognise situations where:", "items": [
-      {"id": "physical", "label": "Her physical situation is affecting her wellbeing", "official": "The person's physical situation is impacting upon their wellbeing", "hint": "notices or names how her physical situation affects her: shaky hands (phone buttons), balance, not eaten, not slept, not dressed"},
-      {"id": "variation", "label": "Her wellbeing has changed", "official": "There are variations to the person's wellbeing", "hint": "notices she is not her usual self (normally dressed by 9, usually cheerful, has stopped going to church)"},
+      {"id": "physical", "label": "Her physical situation is affecting her wellbeing", "quizFacts": ["disability"], "official": "The person's physical situation is impacting upon their wellbeing", "hint": "notices or names how her physical situation affects her: shaky hands (phone buttons), balance, not eaten, not slept, not dressed"},
+      {"id": "variation", "label": "Her wellbeing has changed", "quizFacts": ["usual", "stopped"], "official": "There are variations to the person's wellbeing", "hint": "notices she is not her usual self (normally dressed by 9, usually cheerful, has stopped going to church)"},
       {"id": "role", "label": "Some things are outside your job", "official": "Other aspects of supporting a person's wellbeing are outside of a support workers job role and abilities", "hint": "shows that part of this needs someone else, for example says Lance will follow up, OPAN can advise about the money, Reverend Hill can help with forgiveness, or a GP could help with her low mood; and does not try to investigate or sort out Donna themselves"},
       {"id": "riskind", "label": "There are signs of risk", "official": "There are indicators of potential or actual risk", "hint": "names or responds to a risk, for example says more ornaments could go, asks if she feels safe at home, or worries that she is not eating, not caring for herself or pulling away from people"},
-      {"id": "abuse", "label": "There are signs of possible abuse", "official": "Indicators of possible abuse", "hint": "recognises the missing ornaments and parcels as possible financial abuse and responds (for example says it needs to be reported, gives information)"},
-      {"id": "mental", "label": "There are signs of mental ill-health", "official": "Indicators of mental ill-health", "hint": "recognises low mood, grief, withdrawal, wanting to stay in bed and talk to no one, not eating or sleeping, and responds (checks how she is feeling, asks gently about her safety, plans support)"}
+      {"id": "abuse", "label": "There are signs of possible abuse", "quizFacts": ["parcels"], "official": "Indicators of possible abuse", "hint": "recognises the missing ornaments and parcels as possible financial abuse and responds (for example says it needs to be reported, gives information)"},
+      {"id": "mental", "label": "There are signs of mental ill-health", "quizFacts": ["keyline"], "official": "Indicators of mental ill-health", "hint": "recognises low mood, grief, withdrawal, wanting to stay in bed and talk to no one, not eating or sleeping, and responds (checks how she is feeling, asks gently about her safety, plans support)"}
     ]},
     {"id": "g8", "stage": "lance", "title": "Report to Lance", "official": "Participate in discussions with the supervisor:", "items": [
       {"id": "l_selfdet", "label": "Show that Cherry is in charge of her own life", "official": "That reflect supporting the person's self-determination and the person as authority in their life", "hint": "in the report, makes clear what Cherry wants and decided, and that she is the one who decides"},
@@ -984,7 +1005,8 @@ function setupMode(){
   $('btnLifeline').title = v? 'Show one idea for what to say or do (one per student)' : 'Show a suggested question (one per student)';
   $('boardTitle').innerHTML = v? 'Checklist: what the class has shown<span id="personName" class="hidden"></span>' : 'What we have learned about <span id="personName"></span>';
   $('board').className = v? 'board checklist' : 'board';
-  $('btnExport').textContent = v? 'Download session (Word)' : 'Download board (Word)';
+  $('btnExport').textContent = v? 'Session for students (Word)' : 'Download board (Word)';
+  $('btnExportTeacher').classList.toggle('hidden', !v);
 }
 function picKey(sc, c){ return 'pic_'+sc.id+'_'+c.id; }
 function portraitHTML(sc, c){
@@ -1104,14 +1126,14 @@ function blankSession(){
   if(isVisit()) showTurns([{speaker:'', text: LS.get('apiKey','')? 'Press Start visit when the class is ready.' : 'Press Settings to add your key, then press Start visit.'}]);
 }
 function saveSession(){
-  LS.set('session_'+S.id, Object.assign({history, board, revealed:[...revealed], qCount, lastTurns, student, lastSuggested, stage, openingDone:[...openingDone], boardFacts:[...boardFacts], log: $('log').innerHTML}, isVisit()? {vstage, points, calm, seeText, vlog} : {}));
+  LS.set('session_'+S.id, Object.assign({history, board, revealed:[...revealed], qCount, lastTurns, student, lastSuggested, stage, openingDone:[...openingDone], boardFacts:[...boardFacts], log: $('log').innerHTML}, isVisit()? {vstage, points, calm, seeText, vlog, names, quizSeen:[...quizSeen]} : {}));
 }
 function restoreSession(){
   const s = LS.get('session_'+S.id, null);
   blankSession();
   if(s && s.history && s.history.length){
     history = s.history; board = Object.assign(board, s.board||{}); revealed = new Set(s.revealed||[]); qCount = s.qCount||0; lastTurns = s.lastTurns||[]; student = s.student||newStudent(1, true); if(student.intro===undefined) student.intro = true; lastSuggested = s.lastSuggested||''; stage = s.stage || 'questions'; openingDone = new Set(s.openingDone||[]); boardFacts = new Set(s.boardFacts||[]);
-    if(isVisit()){ vstage = s.vstage || vstage; points = s.points||{}; calm = s.calm||calm; seeText = s.seeText||''; vlog = s.vlog||[]; }
+    if(isVisit()){ vstage = s.vstage || vstage; points = s.points||{}; calm = s.calm||calm; seeText = s.seeText||''; vlog = s.vlog||[]; names = s.names||{}; quizSeen = new Set(s.quizSeen||[]); }
     $('log').innerHTML = s.log||''; renderTurn();
     showTurns(lastTurns.length? lastTurns : [{speaker:'', text:'Meeting in progress. Ask the next question.'}]);
   }
@@ -1330,6 +1352,39 @@ let seeText = '';             // what the students can see right now
 let vlog = [];                // [{stage, n, kind:'say'|'do', text, turns, see, time}]
 let sessionGen = 0;           // goes up on every Reset; an AI reply that arrives for an older session is ignored
 let lastNarration = '';       // what the narrator read before the last answer (Say again repeats it)
+let names = {};               // student number -> first name. Stays in this browser: never sent to the AI or read aloud.
+let quizSeen = new Set();     // observer quiz question numbers reached so far
+let nameFor = 0;              // student number the name box is asking for
+
+function whoLabel(n){ return names[n]? names[n]+' (Student '+n+')' : 'Student '+n; }
+function whoShort(n){ return names[n]? names[n]+' (S'+n+')' : 'Student '+n; }
+function itemNumbers(){ const m = {}; let k = 0; (S.checklist||[]).forEach(g=>(g.items||[]).forEach(it=>{ m[it.id] = ++k; })); return m; }   // same numbers as the quiz and hints
+function quizNumbersFor(freshPoints, freshFacts){
+  // A quiz question is reached when its checklist point is shown, or when the person says something it asks about.
+  const m = itemNumbers(), nums = new Set();
+  (freshPoints||[]).forEach(id=>{ const n = m[id.split('.')[0]]; if(n) nums.add(n); });
+  (freshFacts||[]).forEach(f=>clItems().forEach(it=>{ if((it.quizFacts||[]).includes(f)) nums.add(m[it.id]); }));
+  return [...nums].sort((a,b)=>a-b);
+}
+function flashQuiz(nums){
+  if(!nums || !nums.length) return;
+  nums.forEach(n=>quizSeen.add(n));
+  const el = $('quizFlash'); el.innerHTML = '<small>Quiz</small>'+nums.join(', ');
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  clearTimeout(el._t); el._t = setTimeout(()=>el.classList.remove('show'), 6000);
+}
+function askName(n){
+  nameFor = n; $('nameTitle').textContent = 'Student '+n+', your turn';
+  $('nameInput').value = names[n]||''; $('nameBox').classList.remove('hidden');
+  setTimeout(()=>$('nameInput').focus(), 50);
+}
+function closeName(save){
+  const n = nameFor; if(!n) return;
+  if(save){ const v = $('nameInput').value.trim().replace(/\s+/g,' ').slice(0,30); if(v) names[n] = v; else delete names[n]; }
+  $('nameBox').classList.add('hidden'); nameFor = 0;
+  if(student && student.n===n && vstage!=='done') showCoach('<b>'+esc(whoLabel(n))+':</b> you have '+perTurns()+' turns with '+esc(stageChars()[0].name)+'. '+(vlog.length? 'Look at the checklist and choose something that is still missing.' : 'Say something, or do something and press <b>Do</b>.'));
+  renderVisitTurn(); renderChecklist(); saveSession(); $('question').focus();
+}
 const CALM = ['Very upset','Upset','Unsettled','Calmer','Settled'];
 
 function vStages(){ return (S && S.stages)||[]; }
@@ -1371,7 +1426,8 @@ function transcriptText(entries){
 }
 function visitBlank(){
   sessionGen++;
-  vstage = (vStages()[0]||{}).id || ''; points = {}; calm = vStage().calmStart || 1; seeText = ''; vlog = []; lastNarration = '';
+  vstage = (vStages()[0]||{}).id || ''; points = {}; calm = vStage().calmStart || 1; seeText = ''; vlog = []; lastNarration = ''; names = {}; quizSeen = new Set();
+  if(nameFor){ nameFor = 0; $('nameBox').classList.add('hidden'); }
   if(isVisit()){ busy = false; setVisitBusy(false); stage = 'questions'; student = newStudent(1, true); student.kinds = []; renderPersona(); }
 }
 
@@ -1457,8 +1513,10 @@ async function visitAsk(text, kind){
     lastTurns = j.turns; showTurns(j.turns, false); speakTurns(j.turns, narration);
     if(st.calm && j.calm) calm = j.calm;
     seeText = st.calm? (j.see || seeText) : '';
-    (j.facts||[]).forEach(id=>{ if((S.keyFacts||[]).some(f=>f.id===id)) revealed.add(id); });
+    const newFacts = (j.facts||[]).filter(id=>(S.keyFacts||[]).some(f=>f.id===id) && !revealed.has(id));
+    newFacts.forEach(id=>revealed.add(id));
     const fresh = tickPoints(j.points, student.n);
+    flashQuiz(quizNumbersFor(fresh, newFacts));
     if(j.suggested) lastSuggested = j.suggested;
     qCount++;
     student.q++; student.types.push(fresh.length? 'open' : 'said'); student.facts += fresh.length; (student.kinds = student.kinds||[]).push(kind);
@@ -1480,7 +1538,7 @@ function visitTurnSummary(){
   const kinds = student.kinds||[], said = kinds.filter(k=>k==='say').length, did = kinds.length-said;
   const mine = Object.keys(points).filter(id=>points[id].n===student.n && points[id].stage===vstage);
   const left = missingItems(vstage).length;
-  const parts = ['<b>Student '+student.n+', turn finished.</b> '+said+' said, '+did+' done.'];
+  const parts = ['<b>'+esc(whoLabel(student.n))+', turn finished.</b> '+said+' said, '+did+' done.'];
   parts.push(mine.length? 'You showed: <b>'+esc(mine.map(pointLabel).join(', '))+'</b>.' : 'No new checklist points this time. Next time, choose a point that is still missing.');
   parts.push(left? 'Still to show: '+left+' point'+(left===1?'':'s')+'.' : 'Every point for this part is shown.');
   if(student.lifeline) parts.push('(Lifeline used.)');
@@ -1490,7 +1548,7 @@ function renderVisitTurn(){
   if(!student){ student = newStudent(1, true); student.kinds = []; }
   const per = perTurns(), started = vlog.length>0 || history.length>0, done = vstage==='done';
   $('btnBegin').classList.add('hidden');
-  $('studentLabel').textContent = done? 'Session finished' : 'Student '+student.n+(!started? '' : student.q>=per? ' · turn finished, press Next student' : ' · turn '+(student.q+1)+' of '+per);
+  $('studentLabel').textContent = done? 'Session finished' : 'Student '+student.n+(names[student.n]? ': '+names[student.n] : '')+(!started? '' : student.q>=per? ' · turn finished, press Next student' : ' · turn '+(student.q+1)+' of '+per);
   const kinds = student.kinds||[], dots = [];
   for(let i=0;i<per;i++){ const ty = student.types[i]; dots.push('<i class="'+(ty? 'done'+(ty==='open'?' open':'') : '')+'" title="'+(ty? (kinds[i]==='do'?'Did something':'Said something')+(ty==='open'?', new checklist point':'') : '')+'"></i>'); }
   $('dots').innerHTML = dots.join('');
@@ -1507,7 +1565,7 @@ function renderVisitTurn(){
   renderVisitExplore(); renderSee();
 }
 function renderVisitExplore(){
-  if(vstage==='done'){ $('explore').innerHTML = 'Session finished. Press <b>Download session (Word)</b> for the progress notes.'; return; }
+  if(vstage==='done'){ $('explore').innerHTML = 'Session finished. Press <b>Session for students (Word)</b> for the progress notes.'; return; }
   const left = missingItems(vstage);
   $('explore').innerHTML = left.length? 'Still to show: '+left.slice(0,6).map(it=>'<span>'+esc(missingText(it))+'</span>').join('')+(left.length>6? '<span>and '+(left.length-6)+' more on the checklist</span>' : '') : 'Every point is shown. Press <b>'+esc($('btnStage').textContent)+'</b> when you are ready.';
 }
@@ -1526,15 +1584,18 @@ function renderChecklist(fresh){
   const hasDo = stageItems(vstage).some(it=>it.how || (it.parts||[]).some(p=>p.how));
   const tasks = (vstage!=='done' && (st.tasks||[]).length)? '<details class="cl-tasks" id="clTasks"'+(LS.get('tasksOpen', true)? ' open' : '')+'><summary><b>Your tasks: '+esc(st.title)+'</b></summary><ul>'+st.tasks.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul></details>'
     + (hasDo? '<div class="cl-dohelp"><span class="cl-how">Do</span> means an action. Say or type what you do, starting with "I", for example "I pass her a tissue". Then press <b>Do</b> instead of Say.</div>' : '') : '';
-  $('board').innerHTML = tasks + (S.checklist||[]).map(g=>{
+  const seen = [...quizSeen].sort((a,b)=>a-b);
+  const quizLine = seen.length? '<div class="cl-quizseen">Quiz questions reached so far: <b>'+seen.join(', ')+'</b></div>' : '';
+  const num = itemNumbers();
+  $('board').innerHTML = tasks + quizLine + (S.checklist||[]).map(g=>{
     const gi = order.indexOf(g.stage), later = gi<0 || gi>cur;
     const tag = gi<0? 'After the session' : (gi!==cur? vStages()[gi].title : '');
     const items = (g.items||[]).map(it0=>{
       const it = Object.assign({stage:g.stage}, it0);
       const met = gi>=0 && itemMet(it), isNew = pointIds(it).some(id=>fr.has(id));
-      const ev = pointIds(it).filter(id=>points[id]).map(id=>'Student '+points[id].n+': '+points[id].evidence).join('  |  ');
+      const ev = pointIds(it).filter(id=>points[id]).map(id=>whoShort(points[id].n)+': '+points[id].evidence).join('  |  ');
       const parts = it.parts? ' <span class="cl-parts">'+it.parts.map(p=>{ const ok = !!points[it.id+'.'+p.id]; return '<span class="'+(ok?'met':'')+'">'+(ok?'&#10003; ':'')+esc(p.label)+(p.how? ' <b>'+howText(p.how)+'</b>' : '')+'</span>'; }).join('')+'</span>' : '';
-      return '<div class="cl-item'+(met?' met':'')+(isNew?' new':'')+'"'+(ev? ' title="'+esc(ev)+'"' : '')+'><span class="mark">'+(met?'&#10003;':'&#9675;')+'</span><span>'+esc(it.label)+howChip(it.how)+parts+'</span></div>';
+      return '<div class="cl-item'+(met?' met':'')+(isNew?' new':'')+'"'+(ev? ' title="'+esc(ev)+'"' : '')+'><span class="mark">'+(met?'&#10003;':'&#9675;')+'</span><span class="num">'+num[it.id]+'.</span><span>'+esc(it.label)+howChip(it.how)+parts+'</span></div>';
     }).join('');
     return '<div class="cl-group'+(later?' later':'')+'"><h3><span>'+esc(g.title)+'</span>'+(tag? '<span class="tag">'+esc(tag)+'</span>' : '')+'</h3>'+items+'</div>';
   }).join('');
@@ -1558,6 +1619,7 @@ function startVisit(){
   lastNarration = st.scene || '';
   speakTurns([], lastNarration);
   renderPersona(); renderVisitTurn(); renderChecklist(); saveSession();
+  askName(1);
 }
 function visitNextStudent(){
   const n = student? student.n+1 : 1;
@@ -1565,6 +1627,7 @@ function visitNextStudent(){
   if(vstage!=='done') showCoach('<b>Student '+n+':</b> you have '+perTurns()+' turns with '+esc(stageChars()[0].name)+'. Look at the checklist and choose something that is still missing.');
   toast('Student '+n+': your turn.');
   renderVisitTurn(); saveSession();
+  if(vstage!=='done' && (vlog.length || history.length)) askName(n);
 }
 async function reviewStage(fromTeacher){
   // One look over the whole conversation of this part, for points the live check missed.
@@ -1579,6 +1642,7 @@ async function reviewStage(fromTeacher){
     const raw = await callAPI([{role:'user', content:'CHECKLIST POINTS STILL OPEN:\n'+open.join('\n')+'\n\nTRANSCRIPT:\n'+transcriptText(entries)}], sys);
     if(gen !== sessionGen) return [];   // Reset was pressed while checking
     const fresh = tickPoints(parseVisit(raw).points, student.n);
+    flashQuiz(quizNumbersFor(fresh, []));
     renderChecklist(fresh); saveSession();
     if(fromTeacher){ const left = missingItems(vstage); showCoach(left.length? 'Check finished. Still to show: '+left.map(it=>esc(missingText(it))).join('; ')+'.' : 'Check finished. Every point for this part is shown.'); }
     toast(fresh.length? fresh.length+' more point'+(fresh.length===1?' was':'s were')+' found in the conversation.' : 'No more points found in the conversation.');
@@ -1608,7 +1672,7 @@ function advanceStage(){
   history = [{role:'user', content:'TEACHER: '+(next.startNote||'The next part begins now.')},{role:'assistant', content: JSON.stringify({turns:opening, coach:'', suggested:'', points:[]})}];
   renderPersona(); lastTurns = opening; lastNarration = next.scene || '';
   showTurns(opening.length? opening : [{speaker:'', text:next.title}]); speakTurns(opening, lastNarration);
-  showCoach('<b>'+esc(next.title)+'.</b> '+esc(next.intro||'')+' Student '+student.n+', carry on.', true);
+  showCoach('<b>'+esc(next.title)+'.</b> '+esc(next.intro||'')+' '+esc(whoLabel(student.n))+', carry on.', true);
   $('question').placeholder = 'What you say to '+c.name+' appears here. You can also type it, then press Say.';
   renderVisitTurn(); renderChecklist(); saveSession();
 }
@@ -1616,7 +1680,8 @@ function finishVisit(){
   const order = vStages().map(s=>s.id), tracked = clItems().filter(it=>order.includes(it.stage)), got = tracked.filter(itemMet).length;
   lastTurns = [];
   showTurns([{speaker:'', text:'The session is finished. Thank you, everyone.'}]);
-  showCoach('<b>Session finished.</b> The class showed '+got+' of '+tracked.length+' checklist points. Press <b>Download session (Word)</b>. Each student writes the progress note for '+esc(S.docTitle||S.person)+' from it.', true);
+  showCoach('<b>Session finished.</b> The class showed '+got+' of '+tracked.length+' checklist points. Press <b>Session for students (Word)</b>. Each student writes the progress note for '+esc(S.docTitle||S.person)+' from it. Your copy with names: <b>Teacher copy with names (Word)</b>.', true);
+  const m = itemNumbers(); flashQuiz(clItems().filter(it=>it.stage==='after').map(it=>m[it.id]));   // the progress note question
   renderVisitTurn(); renderChecklist(); saveSession();
 }
 const DOC_STYLE = '<style>body{font-family:Calibri,Arial,sans-serif;font-size:12pt}h1{font-size:18pt}h2{font-size:14pt;margin-top:18pt;color:#1b7f79}p{margin:3pt 0}p.see{font-style:italic;color:#555}table{border-collapse:collapse;width:100%}td,th{border:1px solid #444;padding:5pt;vertical-align:top;text-align:left}</style>';
@@ -1633,20 +1698,46 @@ function visitDocHTML(){
     '<h2>Progress Notes for '+esc(name)+'</h2><table><tr><th style="width:24%">Date &amp; Time</th><th>Progress Note</th></tr><tr><td style="height:320pt">&nbsp;</td><td>&nbsp;</td></tr></table>'+
     '</body></html>';
 }
-function checklistDocHTML(){
-  const order = vStages().map(s=>s.id), tracked = clItems().filter(it=>order.includes(it.stage)), got = tracked.filter(itemMet).length;
+function checklistTableHTML(){
+  const order = vStages().map(s=>s.id), m = itemNumbers();
   const rows = (S.checklist||[]).map(g=>{
     const inPage = order.includes(g.stage);
     return '<tr><td colspan="3" style="background:#dff0ee"><b>'+esc(g.official||g.title)+'</b></td></tr>'+(g.items||[]).map(it0=>{
       const it = Object.assign({stage:g.stage}, it0), met = inPage && itemMet(it);
-      const ev = pointIds(it).filter(id=>points[id]).map(id=>(it.parts? esc(pointLabel(id).split(': ').pop())+': ' : '')+'Student '+points[id].n+', "'+esc(points[id].evidence)+'"').join('<br>');
-      return '<tr><td>'+esc(it.official||it.label)+'</td><td style="width:14%">'+(inPage? (met? 'Shown' : 'Not yet') : 'After the session')+'</td><td style="width:40%">'+ev+'</td></tr>';
+      const ev = pointIds(it).filter(id=>points[id]).map(id=>(it.parts? esc(pointLabel(id).split(': ').pop())+': ' : '')+esc(whoLabel(points[id].n))+', "'+esc(points[id].evidence)+'"').join('<br>');
+      return '<tr><td>'+m[it.id]+'. '+esc(it.official||it.label)+'</td><td style="width:14%">'+(inPage? (met? 'Shown' : 'Not yet') : 'After the session')+'</td><td style="width:40%">'+ev+'</td></tr>';
     }).join('');
   }).join('');
+  return '<table><tr><th>Checklist point (number = quiz question)</th><th>Shown?</th><th>Evidence (student and words)</th></tr>'+rows+'</table>';
+}
+function checklistDocHTML(){
+  const order = vStages().map(s=>s.id), tracked = clItems().filter(it=>order.includes(it.stage)), got = tracked.filter(itemMet).length;
   return '<html><head><meta charset="utf-8"><title>'+esc(S.title)+' checklist</title>'+DOC_STYLE+'</head><body>'+
     '<h1>'+esc(S.title)+': checklist evidence</h1><p>'+esc(S.unit||'')+'<br>Class practice session. Date: '+new Date().toLocaleDateString('en-AU')+'<br>Points shown in the page: '+got+' of '+tracked.length+'.</p>'+
-    '<p>The AI listened for each point during the session and noted the student turn and words. Use this as a guide only. The teacher makes every assessment decision.</p>'+
-    '<table><tr><th>Checklist point</th><th>Shown?</th><th>Evidence (student turn and words)</th></tr>'+rows+'</table></body></html>';
+    (Object.keys(names).length? '<p><b>This copy has student names. Keep it private.</b></p>' : '')+
+    '<p>The AI listened for each point during the session and noted the student and their words. Use this as a guide only. The teacher makes every assessment decision.</p>'+
+    checklistTableHTML()+'</body></html>';
+}
+function visitTeacherDocHTML(){
+  // Teacher copy for marking: who took part, what each student showed, the checklist and the conversation, with names.
+  const m = itemNumbers(), order = vStages().map(s=>s.id), tracked = clItems().filter(it=>order.includes(it.stage)), got = tracked.filter(itemMet).length;
+  const nums = [...new Set(vlog.map(e=>e.n).concat(Object.keys(names).map(Number)))].sort((a,b)=>a-b);
+  const people = nums.map(n=>{
+    const mine = vlog.filter(e=>e.n===n), said = mine.filter(e=>e.kind==='say').length, did = mine.length-said;
+    const pts = Object.keys(points).filter(id=>points[id].n===n).sort((a,b)=>m[a.split('.')[0]]-m[b.split('.')[0]]);
+    return '<tr><td>'+n+'</td><td>'+esc(names[n]||'(no name typed)')+'</td><td>'+said+' said, '+did+' done</td><td>'+(pts.map(id=>m[id.split('.')[0]]+'. '+esc(pointLabel(id))+': <i>"'+esc(points[id].evidence)+'"</i>').join('<br>')||'none')+'</td></tr>';
+  }).join('');
+  const body = vStages().map(st=>{
+    const entries = vlog.filter(e=>e.stage===st.id); if(!entries.length) return '';
+    return '<h3>'+esc(st.title)+'</h3>'+entries.map(e=>'<p><b>'+esc(whoLabel(e.n))+' '+(e.kind==='do'?'does':'says')+':</b> '+esc(e.text)+'</p>'+e.turns.map(t=>'<p><b>'+esc(t.speaker)+':</b> '+esc(t.text)+'</p>').join('')+(e.see? '<p class="see">What you could see: '+esc(e.see)+'</p>' : '')).join('');
+  }).join('');
+  return '<html><head><meta charset="utf-8"><title>'+esc(S.title)+' teacher copy</title>'+DOC_STYLE+'</head><body>'+
+    '<h1>'+esc(S.title)+': teacher copy with student names</h1><p>'+esc(S.unit||'')+'<br>Class practice session. Date: '+new Date().toLocaleDateString('en-AU')+'<br>Checklist points shown: '+got+' of '+tracked.length+'.</p>'+
+    '<p><b>This copy has student names. Keep it private and use it for marking.</b> The students\' copy has no names.</p>'+
+    '<h2>Students</h2><table><tr><th style="width:8%">Turn</th><th style="width:18%">Name</th><th style="width:16%">Said / done</th><th>Checklist points shown (number = quiz question) and their words</th></tr>'+(people||'<tr><td colspan="4">No turns yet.</td></tr>')+'</table>'+
+    '<h2>Checklist</h2>'+checklistTableHTML()+
+    '<h2>What was said and done</h2>'+(body || '<p>(Nothing was said yet.)</p>')+
+    '</body></html>';
 }
 
 // ---------- Speech out ----------
@@ -1910,9 +2001,13 @@ function init(){
   $('btnNext').onclick = nextStudent;
   $('btnLifeline').onclick = useLifeline;
 
-  $('btnExport').onclick = ()=> isVisit()? download(S.id+'-session.doc', visitDocHTML(), 'application/msword') : download(S.id+'-board.doc', boardHTML(), 'application/msword');
+  $('btnExport').onclick = ()=> isVisit()? download(S.id+'-session-students.doc', visitDocHTML(), 'application/msword') : download(S.id+'-board.doc', boardHTML(), 'application/msword');
+  $('btnExportTeacher').onclick = ()=> download(S.id+'-session-teacher-with-names.doc', visitTeacherDocHTML(), 'application/msword');
+  $('btnNameOk').onclick = ()=> closeName(true);
+  $('btnNameSkip').onclick = ()=> closeName(false);
+  $('nameInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); closeName(true); } });
   $('btnPrint').onclick = ()=> window.print();
-  $('btnSave').onclick = ()=> download(S.id+'-session.json', JSON.stringify(Object.assign({scenario:S.id, when:new Date().toISOString(), board, revealed:[...revealed], history}, isVisit()? {vstage, points, vlog} : {}), null, 2), 'application/json');
+  $('btnSave').onclick = ()=> download(S.id+'-session.json', JSON.stringify(Object.assign({scenario:S.id, when:new Date().toISOString(), board, revealed:[...revealed], history}, isVisit()? {vstage, points, vlog, names} : {}), null, 2), 'application/json');
   $('btnDo').onclick = ()=>{ stopListening(); ask($('question').value, {kind:'do'}); };
   $('btnStage').onclick = stageButton;
   $('btnCheckAll').onclick = ()=>{ if(!vlog.length){ toast('Nothing to check yet.'); return; } reviewStage(true); };
