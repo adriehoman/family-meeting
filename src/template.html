@@ -56,6 +56,7 @@
   .micbtn{min-width:150px;font-size:1.15rem;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border-radius:14px}
   .micbtn .big{font-size:1.9rem;line-height:1}
   .micbtn.listening{background:var(--warn);color:#fff;animation:pulse 1.2s infinite}
+  .micbtn.waiting{background:#dcdcdc;color:#707070;opacity:1}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(179,84,30,.5)}70%{box-shadow:0 0 0 14px rgba(179,84,30,0)}100%{box-shadow:0 0 0 0 rgba(179,84,30,0)}}
   .heard{margin-top:8px;font-size:.95rem;color:var(--muted);min-height:1.4em}
   .qmeta{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
@@ -119,6 +120,10 @@
   .cl-parts{display:inline-flex;gap:4px;flex-wrap:wrap;margin-left:2px}
   .cl-parts span{font-size:.8rem;padding:0 8px;border-radius:999px;background:var(--chip);color:var(--muted)}
   .cl-parts span.met{background:var(--ok-soft);color:var(--ok)}
+  .cl-parts span b{color:#6b5423;font-weight:700}
+  .cl-how{display:inline-block;font-size:.72rem;line-height:1.5;margin-left:6px;padding:0 7px;border-radius:999px;background:#e9dcc0;color:#6b5423;font-weight:700;vertical-align:1px;white-space:nowrap}
+  .cl-dohelp{font-size:.9rem;color:var(--muted);margin:-4px 0 10px;padding:0 4px}
+  .cl-dohelp .cl-how{margin-left:0}
 
   /* Drawers and modals */
   .drawer{position:fixed;left:0;right:0;bottom:0;background:#fffdf7;border-top:3px solid var(--accent);box-shadow:0 -8px 30px rgba(0,0,0,.15);max-height:55vh;overflow:auto;padding:14px 22px;font-size:.98rem;transform:translateY(100%);transition:transform .25s;z-index:20}
@@ -314,9 +319,10 @@
       <div id="voiceRows"></div>
       <div class="row" style="margin-top:8px">
         <label><input type="checkbox" id="speakOn" checked style="width:auto"> Speak the answers out loud</label>
+        <label><input type="checkbox" id="narratorOn" checked style="width:auto"> Narrator reads out what the back of the room cannot see</label>
         <label>Speed <input type="range" id="rate" min="0.7" max="1.2" step="0.05" value="0.95" style="width:140px;vertical-align:middle"></label>
       </div>
-      <div class="hint">Voices come from Windows and the browser. Microsoft Edge usually has the most natural Australian voices (for example Natasha and William).</div>
+      <div class="hint">Voices come from Windows and the browser. Microsoft Edge usually has the most natural Australian voices (for example Natasha and William). The narrator uses a different voice from the characters (for example Ryan or Mitchell). It reads the scene and "What you can see", and any question or action that was typed instead of spoken. While anyone is speaking, the microphone button is grey and says "Please wait...".</div>
     </div>
 
     <div class="field">
@@ -360,6 +366,7 @@
       <li><b>Go to Lance</b> works only when every point for the visit is green. If points are missing, the page checks the whole conversation once more, then lists what is still needed. Teacher notes has "Move on now" if the AI clearly missed something.</li>
       <li><b>Report to Lance</b>, then <b>Finish session</b>. Press <b>Download session (Word)</b>: it has everything that was said and done, and an empty progress note table for each student.</li>
     </ol>
+    <p><b>Narrator and the microphone button:</b> a narrator with a different voice reads out what the back of the room cannot see: the scene, "What you can see", and any question or action that was typed instead of spoken. While the narrator or a character is speaking, the microphone button is grey and says "Please wait...". Turn the narrator off or choose its voice in Settings.</p>
     <p><b>If something fails:</b> the internet or microphone can drop out. Typing still works without a microphone. If the API fails, you have the printed case notes and can play Rosie yourself.</p>
     <p><b>Privacy:</b> do not say or type student names. Questions go to Anthropic's API under your key. Nothing is stored anywhere except this browser.</p>
     <div class="row" style="justify-content:flex-end"><button class="primary" id="btnHelpClose" style="flex:0">Close</button></div>

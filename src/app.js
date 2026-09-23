@@ -175,6 +175,7 @@ function nextStudent(){
     // keep the model's memory short: the next student starts the opening again
     history = history.slice(0,2).concat([{role:'user', content:'TEACHER: A different student has now sat down to practise opening the meeting. Behave as if the call has just connected again and you have not been introduced to this person. Do not mention the previous student.'},{role:'assistant', content: JSON.stringify({turns:[], question_type:'', tip:'', coach:'', suggested_question:'', board:[], facts:[], opening:[]})}]);
     showTurns([{speaker:'', text: S.characters.map(c=>c.name).join(' and ')+' are on the call, waiting. Introduce yourself.'}]);
+    speakTurns([], S.characters.map(c=>c.name).join(' and ')+' are on the call, waiting. Student '+n+', introduce yourself.');
     showCoach(openingHTML());
     toast('Student '+n+': open the meeting.');
   } else {
@@ -369,8 +370,10 @@ async function ask(text, opts){
   if(isVisit()) return visitAsk(text, opts.kind||'say');
   if(busy) return;
   text = (text||'').trim(); if(!text) return;
+  const typed = !inputByMic; inputByMic = false;
   busy = true; $('btnSend').disabled=true; $('btnMic').disabled=true;
-  stopSpeaking();
+  stopSpeaking(); updateMic();
+  if(typed && !opts.silent) narrateInput('The student says: '+text);
   const userContent = (whisperText? 'TEACHER: '+whisperText+'\n\nSTUDENT: '+text : text);
   whisperText='';
   if(!opts.silent){ qCount++; }
@@ -422,7 +425,7 @@ async function ask(text, opts){
     showTurns([{speaker:'', text:'Something went wrong: '+err.message}], true); toast(err.message);
     if(!opts.silent){ qCount--; }
   }finally{
-    busy=false; $('btnSend').disabled=false; $('btnMic').disabled=false;
+    busy=false; $('btnSend').disabled=false; $('btnMic').disabled=false; updateMic();
   }
 }
 
@@ -435,6 +438,8 @@ let points = {};              // checklist point id ('listen' or 'services.minis
 let calm = 1;                 // 1 very upset .. 5 settled (only in a stage with "calm")
 let seeText = '';             // what the students can see right now
 let vlog = [];                // [{stage, n, kind:'say'|'do', text, turns, see, time}]
+let sessionGen = 0;           // goes up on every Reset; an AI reply that arrives for an older session is ignored
+let lastNarration = '';       // what the narrator read before the last answer (Say again repeats it)
 const CALM = ['Very upset','Upset','Unsettled','Calmer','Settled'];
 
 function vStages(){ return (S && S.stages)||[]; }
@@ -446,7 +451,9 @@ function pointIds(it){ return it.parts? it.parts.map(p=>it.id+'.'+p.id) : [it.id
 function itemMet(it){ return pointIds(it).every(id=>points[id]); }
 function stageItems(st){ return clItems().filter(it=>it.stage===st); }
 function missingItems(st){ return stageItems(st).filter(it=>!itemMet(it)); }
-function missingText(it){ return it.label+(it.parts? ' ('+it.parts.filter(p=>!points[it.id+'.'+p.id]).map(p=>p.label).join(', ')+')' : ''); }
+function howText(how){ return how==='do'? 'Do' : how==='both'? 'Say + Do' : ''; }   // points shown with an action use the Do button
+function howChip(how){ return how? '<span class="cl-how" title="'+(how==='do'? 'Use the Do button' : 'Say something, and use the Do button for the action')+'">'+howText(how)+'</span>' : ''; }
+function missingText(it){ return it.label+(it.how? ' ('+howText(it.how)+')' : '')+(it.parts? ' ('+it.parts.filter(p=>!points[it.id+'.'+p.id]).map(p=>p.label+(p.how? ', '+howText(p.how) : '')).join('; ')+')' : ''); }
 function pointLabel(id){ const [a,b] = id.split('.'); const it = clItems().find(x=>x.id===a); if(!it) return id; const p = b && (it.parts||[]).find(x=>x.id===b); return p? it.label+': '+p.label : it.label; }
 function openPoints(st){
   // the points still open in a stage, with what counts, for the AI
@@ -473,8 +480,9 @@ function transcriptText(entries){
   return entries.map(e=>'[Student '+e.n+'] SUPPORT WORKER '+(e.kind==='do'?'DOES':'SAYS')+': '+e.text+'\n'+e.turns.map(t=>t.speaker+': '+t.text).join('\n')+(e.see? '\n(seen: '+e.see+')' : '')).join('\n');
 }
 function visitBlank(){
-  vstage = (vStages()[0]||{}).id || ''; points = {}; calm = vStage().calmStart || 1; seeText = ''; vlog = [];
-  if(isVisit()){ stage = 'questions'; student = newStudent(1, true); student.kinds = []; renderPersona(); }
+  sessionGen++;
+  vstage = (vStages()[0]||{}).id || ''; points = {}; calm = vStage().calmStart || 1; seeText = ''; vlog = []; lastNarration = '';
+  if(isVisit()){ busy = false; setVisitBusy(false); stage = 'questions'; student = newStudent(1, true); student.kinds = []; renderPersona(); }
 }
 
 function visitPrompt(){
@@ -508,6 +516,7 @@ function visitPrompt(){
     shape.push('"see":"what the support worker can see now: '+c.name+"'s body language or something in the room, third person, at most 15 words\"");
     shape.push('"calm":'+c.name+"'s calm level after this message, a number from 1 (very upset) to 5 (settled)");
   }
+  shape.push('"action":"only when the latest message starts SUPPORT WORKER DOES: that action retold in the third person for a narrator, starting The support worker, at most 15 words (for example: The support worker passes Cherry a tissue.). Otherwise an empty string."');
   shape.push('"coach":"one sentence (max 22 words) of coaching for the support worker about their communication technique, or a checklist area they have not shown yet. Name the skill. Never give the exact words to say."');
   shape.push('"suggested":"one natural next thing the support worker could say or do, in plain English (used only if a student asks for a lifeline)"');
   if(factsHere.length) shape.push('"facts":["ids of story facts '+c.name+' revealed in THIS answer, from: '+factsHere.map(f=>f.id+' = '+f.label).join('; ')+'"]');
@@ -526,28 +535,36 @@ function parseVisit(text){
   if(!turns.length && j.reply) turns = [{speaker:who.name, text:String(j.reply).trim()}];
   if(!turns.length) turns = [{speaker:who.name, text:'...'}];
   const c = parseInt(j.calm);
-  return {turns, see: String(j.see||'').trim(), calm: (c>=1 && c<=5)? c : 0, coach: j.coach||'', suggested: j.suggested||j.suggested_question||'', facts: Array.isArray(j.facts)? j.facts : [], points: Array.isArray(j.points)? j.points : []};
+  return {turns, see: String(j.see||'').trim(), action: String(j.action||'').trim(), calm: (c>=1 && c<=5)? c : 0, coach: j.coach||'', suggested: j.suggested||j.suggested_question||'', facts: Array.isArray(j.facts)? j.facts : [], points: Array.isArray(j.points)? j.points : []};
 }
-function setVisitBusy(on){ ['btnSend','btnMic','btnDo','btnStage'].forEach(id=>{ $(id).disabled = on; }); }
+function setVisitBusy(on){ ['btnSend','btnDo','btnStage'].forEach(id=>{ $(id).disabled = on; }); updateMic(); }
 
 async function visitAsk(text, kind){
   if(busy) return;
   text = (text||'').trim(); if(!text) return;
   if(!vlog.length && !history.length){ toast('Press Start visit first.'); return; }
   if(vstage==='done'){ toast('The session is finished. Download the session, or press Reset to start again.'); return; }
+  const typed = !inputByMic; inputByMic = false;
   busy = true; setVisitBusy(true);
   stopSpeaking();
+  if(typed && kind==='say') narrateInput('The support worker says: '+text);
+  const gen = sessionGen;
   const userContent = (whisperText? 'TEACHER: '+whisperText+'\n\n' : '')+'SUPPORT WORKER '+(kind==='do'?'DOES':'SAYS')+': '+text;
   whisperText = '';
   showTurns([{speaker:'', text:'Thinking...'}], true); setSpeaking(''); showCoach('');
   try{
     const msgs = [...history, {role:'user', content:userContent}];
     const raw = await callAPI(msgs);
+    if(gen !== sessionGen) return;   // Reset was pressed while waiting: drop this reply
     const j = parseVisit(raw);
     history = [...msgs, {role:'assistant', content: raw}];
     if(history.length>40) history = history.slice(history.length-40);
-    lastTurns = j.turns; showTurns(j.turns, false); speakTurns(j.turns);
     const st = vStage();
+    // Narrator: a typed action in the third person, then what you can see, then the person answers.
+    let narration = (typed && kind==='do')? (j.action || ('The support worker: '+text)) : '';
+    if(st.calm && j.see) narration = (narration? narration+' ' : '')+j.see;
+    lastNarration = narration;
+    lastTurns = j.turns; showTurns(j.turns, false); speakTurns(j.turns, narration);
     if(st.calm && j.calm) calm = j.calm;
     seeText = st.calm? (j.see || seeText) : '';
     (j.facts||[]).forEach(id=>{ if((S.keyFacts||[]).some(f=>f.id===id)) revealed.add(id); });
@@ -563,9 +580,10 @@ async function visitAsk(text, kind){
     $('question').value=''; $('heard').textContent='';
     renderVisitTurn(); renderChecklist(fresh); saveSession();
   }catch(err){
+    if(gen !== sessionGen) return;
     showTurns([{speaker:'', text:'Something went wrong: '+err.message}], true); toast(err.message);
   }finally{
-    busy = false; setVisitBusy(false);
+    if(gen === sessionGen){ busy = false; setVisitBusy(false); }
   }
 }
 function visitTurnSummary(){
@@ -615,7 +633,9 @@ function renderChecklist(fresh){
   const fr = new Set(fresh||[]);
   const order = vStages().map(s=>s.id), cur = vstage==='done'? order.length : order.indexOf(vstage);
   const st = vStage();
-  const tasks = (vstage!=='done' && (st.tasks||[]).length)? '<details class="cl-tasks" id="clTasks"'+(LS.get('tasksOpen', true)? ' open' : '')+'><summary><b>Your tasks: '+esc(st.title)+'</b></summary><ul>'+st.tasks.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul></details>' : '';
+  const hasDo = stageItems(vstage).some(it=>it.how || (it.parts||[]).some(p=>p.how));
+  const tasks = (vstage!=='done' && (st.tasks||[]).length)? '<details class="cl-tasks" id="clTasks"'+(LS.get('tasksOpen', true)? ' open' : '')+'><summary><b>Your tasks: '+esc(st.title)+'</b></summary><ul>'+st.tasks.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul></details>'
+    + (hasDo? '<div class="cl-dohelp"><span class="cl-how">Do</span> means an action. Say or type what you do, starting with "I", for example "I pass her a tissue". Then press <b>Do</b> instead of Say.</div>' : '') : '';
   $('board').innerHTML = tasks + (S.checklist||[]).map(g=>{
     const gi = order.indexOf(g.stage), later = gi<0 || gi>cur;
     const tag = gi<0? 'After the session' : (gi!==cur? vStages()[gi].title : '');
@@ -623,8 +643,8 @@ function renderChecklist(fresh){
       const it = Object.assign({stage:g.stage}, it0);
       const met = gi>=0 && itemMet(it), isNew = pointIds(it).some(id=>fr.has(id));
       const ev = pointIds(it).filter(id=>points[id]).map(id=>'Student '+points[id].n+': '+points[id].evidence).join('  |  ');
-      const parts = it.parts? ' <span class="cl-parts">'+it.parts.map(p=>{ const ok = !!points[it.id+'.'+p.id]; return '<span class="'+(ok?'met':'')+'">'+(ok?'&#10003; ':'')+esc(p.label)+'</span>'; }).join('')+'</span>' : '';
-      return '<div class="cl-item'+(met?' met':'')+(isNew?' new':'')+'"'+(ev? ' title="'+esc(ev)+'"' : '')+'><span class="mark">'+(met?'&#10003;':'&#9675;')+'</span><span>'+esc(it.label)+parts+'</span></div>';
+      const parts = it.parts? ' <span class="cl-parts">'+it.parts.map(p=>{ const ok = !!points[it.id+'.'+p.id]; return '<span class="'+(ok?'met':'')+'">'+(ok?'&#10003; ':'')+esc(p.label)+(p.how? ' <b>'+howText(p.how)+'</b>' : '')+'</span>'; }).join('')+'</span>' : '';
+      return '<div class="cl-item'+(met?' met':'')+(isNew?' new':'')+'"'+(ev? ' title="'+esc(ev)+'"' : '')+'><span class="mark">'+(met?'&#10003;':'&#9675;')+'</span><span>'+esc(it.label)+howChip(it.how)+parts+'</span></div>';
     }).join('');
     return '<div class="cl-group'+(later?' later':'')+'"><h3><span>'+esc(g.title)+'</span>'+(tag? '<span class="tag">'+esc(tag)+'</span>' : '')+'</h3>'+items+'</div>';
   }).join('');
@@ -645,6 +665,8 @@ function startVisit(){
   lastTurns = [];
   showTurns([{speaker:'', text: st.startText || 'Student 1: begin.'}]);
   showCoach('<b>Student 1:</b> you have '+perTurns()+' turns. Say something to '+esc(stageChars()[0].name)+', or do something and press <b>Do</b>.');
+  lastNarration = st.scene || '';
+  speakTurns([], lastNarration);
   renderPersona(); renderVisitTurn(); renderChecklist(); saveSession();
 }
 function visitNextStudent(){
@@ -660,21 +682,25 @@ async function reviewStage(fromTeacher){
   if(!open.length || !entries.length){ if(fromTeacher) toast('Nothing left to check in this part.'); return []; }
   if(busy) return [];
   busy = true; setVisitBusy(true);
+  const gen = sessionGen;
   showCoach('<b>Checking the whole conversation</b> for points the live check may have missed...');
   try{
     const sys = 'You help a TAFE Queensland teacher with an observation checklist for a support work practice session. The whole class took turns as one support worker. Read the transcript. For each checklist point in the list, decide whether the support worker clearly showed it anywhere in the transcript. Be fair but not generous. Reply with JSON only, no code fences: {"points":[{"id":"point id","student":student number,"evidence":"the support worker\'s own words or action, at most 12 words"}]}. Include only points that were clearly shown. An empty list is fine.';
     const raw = await callAPI([{role:'user', content:'CHECKLIST POINTS STILL OPEN:\n'+open.join('\n')+'\n\nTRANSCRIPT:\n'+transcriptText(entries)}], sys);
+    if(gen !== sessionGen) return [];   // Reset was pressed while checking
     const fresh = tickPoints(parseVisit(raw).points, student.n);
     renderChecklist(fresh); saveSession();
     if(fromTeacher){ const left = missingItems(vstage); showCoach(left.length? 'Check finished. Still to show: '+left.map(it=>esc(missingText(it))).join('; ')+'.' : 'Check finished. Every point for this part is shown.'); }
     toast(fresh.length? fresh.length+' more point'+(fresh.length===1?' was':'s were')+' found in the conversation.' : 'No more points found in the conversation.');
     return fresh;
-  }catch(err){ toast(err.message); showCoach(''); return []; }
-  finally{ busy = false; setVisitBusy(false); renderVisitTurn(); }
+  }catch(err){ if(gen === sessionGen){ toast(err.message); showCoach(''); } return []; }
+  finally{ if(gen === sessionGen){ busy = false; setVisitBusy(false); renderVisitTurn(); } }
 }
 async function stageButton(){
   if(busy || vstage==='done') return;
+  const gen = sessionGen;
   if(missingItems(vstage).length) await reviewStage(false);
+  if(gen !== sessionGen) return;
   const left = missingItems(vstage);
   if(left.length){
     showCoach('<b>Not yet.</b> Before you move on, the class still needs to show: '+left.map(it=>esc(missingText(it))).join('; ')+'. <b>Next student</b>: choose one of these.');
@@ -690,8 +716,8 @@ function advanceStage(){
   const c = stageChars()[0];
   const opening = c.opening? [{speaker:c.name, text:c.opening}] : [];
   history = [{role:'user', content:'TEACHER: '+(next.startNote||'The next part begins now.')},{role:'assistant', content: JSON.stringify({turns:opening, coach:'', suggested:'', points:[]})}];
-  renderPersona(); lastTurns = opening;
-  showTurns(opening.length? opening : [{speaker:'', text:next.title}]); speakTurns(opening);
+  renderPersona(); lastTurns = opening; lastNarration = next.scene || '';
+  showTurns(opening.length? opening : [{speaker:'', text:next.title}]); speakTurns(opening, lastNarration);
   showCoach('<b>'+esc(next.title)+'.</b> '+esc(next.intro||'')+' Student '+student.n+', carry on.', true);
   $('question').placeholder = 'What you say to '+c.name+' appears here. You can also type it, then press Say.';
   renderVisitTurn(); renderChecklist(); saveSession();
@@ -746,24 +772,66 @@ function pickVoice(c){
   const au = voices.filter(v=>/en[-_]AU/i.test(v.lang));
   return byName(au) || byName(voices.filter(v=>/^en/i.test(v.lang))) || au[0] || voices.find(v=>/^en/i.test(v.lang)) || voices[0] || null;
 }
-function speakTurns(turns){
+// The narrator reads out what the back of the room cannot see: the scene, what the person does, and anything typed instead of spoken.
+function narratorOn(){ return LS.get('narratorOn', true); }
+function pickNarratorVoice(){
+  const want = LS.get('voice_narrator','');
+  if(want){ const v = voices.find(v=>v.name===want); if(v) return v; }
+  const used = new Set(S.characters.map(c=>{ const v = pickVoice(c); return v && v.name; }));   // never the same voice as a character
+  const en = voices.filter(v=>/^en/i.test(v.lang) && !used.has(v.name));
+  for(const p of [/ryan/i, /mitchell/i, /thomas/i, /guy/i, /christopher/i, /george/i, /daniel/i]){ const v = en.find(v=>p.test(v.name)); if(v) return v; }
+  const fem = /natasha|catherine|female|karen|hayley|zira|jenny|libby|sonia|mia|aria|samantha|kate|annie|clara|emma|ava|michelle|hazel|susan|linda|heather/i;
+  return en.find(v=>/male|james|david|mark|richard|neil|brian|andrew|eric|connor|liam|william/i.test(v.name) && !fem.test(v.name)) || en[0] || voices[0] || null;
+}
+// Speaking state: the microphone button is grey ("Please wait...") while the narrator or a character is talking.
+let speechPending = 0, speechToken = 0, speakingNow = false, speechTimer = null, speechPoll = null, speechUntil = 0, inputNarration = false;
+function speechDone(){
+  speakingNow = false; speechPending = 0; speechUntil = 0;
+  clearTimeout(speechTimer); clearInterval(speechPoll); speechTimer = speechPoll = null;
+  updateMic();
+}
+function speakOne(text, voice, speaker){
+  const u = new SpeechSynthesisUtterance(text);
+  if(voice) u.voice = voice;
+  u.rate = parseFloat(LS.get('rate', 0.95)) * (speaker? 1 : 0.95); u.pitch = 1; u.lang = (voice&&voice.lang)||'en-AU';
+  const tok = speechToken;
+  speechPending++; speakingNow = true; updateMic();
+  u.onstart = ()=>{ if(speaker && tok===speechToken) setSpeaking(speaker); };
+  u.onend = u.onerror = ()=>{ if(tok!==speechToken) return; if(speaker) setSpeaking(''); speechPending = Math.max(0, speechPending-1); if(!speechPending) speechDone(); };
+  // Browser voices sometimes never say they have finished, so the button always comes back after the expected time.
+  const words = String(text).split(/\s+/).length;
+  speechUntil = Math.max(speechUntil, Date.now()) + words*480 + 2500;
+  clearTimeout(speechTimer); speechTimer = setTimeout(()=>{ if(tok===speechToken){ speechToken++; setSpeaking(''); speechDone(); } }, speechUntil - Date.now());
+  if(!speechPoll){ let quiet = 0; speechPoll = setInterval(()=>{ const busyNow = speechSynthesis.speaking || speechSynthesis.pending; quiet = busyNow? 0 : quiet+1; if(quiet>=3){ speechToken++; setSpeaking(''); speechDone(); } }, 700); }
+  speechSynthesis.speak(u);
+}
+function speakTurns(turns, narration){
   if(!window.speechSynthesis || !LS.get('speakOn', true)) return;
-  stopSpeaking();
+  if(inputNarration) inputNarration = false;     // let the narrator finish reading the typed question first
+  else stopSpeaking();
+  if(narration && narratorOn()) speakOne(narration, pickNarratorVoice(), '');
   turns.forEach(t=>{
     const c = charByName(t.speaker); if(!c) return;
-    const u = new SpeechSynthesisUtterance(t.text);
-    const v = pickVoice(c); if(v) u.voice = v;
-    u.rate = parseFloat(LS.get('rate', 0.95)); u.pitch = 1; u.lang = (v&&v.lang)||'en-AU';
-    u.onstart = ()=>setSpeaking(t.speaker);
-    u.onend = ()=>setSpeaking('');
-    speechSynthesis.speak(u);
+    speakOne(t.text, pickVoice(c), t.speaker);
   });
 }
-function stopSpeaking(){ try{ speechSynthesis.cancel(); }catch(e){} setSpeaking(''); }
+function narrateInput(text){
+  // Reads out a typed question or action straight away, while the answer is on its way.
+  if(!window.speechSynthesis || !LS.get('speakOn', true) || !narratorOn()) return;
+  speakOne(text, pickNarratorVoice(), ''); inputNarration = true;
+}
+function stopSpeaking(){ try{ speechSynthesis.cancel(); }catch(e){} setSpeaking(''); speechToken++; inputNarration = false; if(speakingNow) speechDone(); }
+function updateMic(){
+  const b = $('btnMic'); if(!b) return;
+  const wait = (busy || speakingNow) && !listening;
+  b.disabled = wait;
+  b.classList.toggle('waiting', wait);
+  if(!listening) $('micLabel').textContent = wait? 'Please wait...' : (isVisit()? 'Speak' : 'Ask a question');
+}
 
 // ---------- Speech in ----------
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let rec = null, listening = false, finalText = '';
+let rec = null, listening = false, finalText = '', inputByMic = false;
 let micStream = null; // kept open for the whole session so the browser asks for permission only once
 async function holdMicrophone(){
   if(micStream && micStream.active) return true;
@@ -779,6 +847,7 @@ async function startListening(){
   rec = new SR(); rec.lang = LS.get('lang','en-AU'); rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 1;
   finalText = $('question').value ? $('question').value.trim()+' ' : '';
   rec.onresult = e=>{
+    inputByMic = true;   // the room heard it, so the narrator does not read it again
     let interim='';
     for(let i=e.resultIndex;i<e.results.length;i++){
       const r=e.results[i]; if(r.isFinal) finalText += r[0].transcript.trim()+' '; else interim += r[0].transcript;
@@ -791,7 +860,7 @@ async function startListening(){
   try{ rec.start(); listening=true; setMicUI(); $('heard').textContent='Listening... speak now.'; }catch(e){ toast('Could not start the microphone.'); }
 }
 function stopListening(){ if(rec && listening){ try{ rec.stop(); }catch(e){} } }
-function setMicUI(){ $('btnMic').classList.toggle('listening', listening); $('micLabel').textContent = listening? 'Listening... click to stop' : (isVisit()? 'Speak' : 'Ask a question'); }
+function setMicUI(){ $('btnMic').classList.toggle('listening', listening); if(listening) $('micLabel').textContent = 'Listening... click to stop'; else updateMic(); }
 
 // ---------- Export ----------
 function boardHTML(){
@@ -853,8 +922,18 @@ function renderCastAndVoices(sc){
     const cur = LS.get('voice_'+sc.id+'_'+c.id,'');
     const auto = pickVoiceFor(sc, c);
     return '<div class="row" style="margin-bottom:6px"><span style="flex:0 0 160px">'+esc(c.name)+'</span><select data-voice="'+esc(c.id)+'"><option value="">(Automatic'+(auto? ': '+esc(auto.name):'')+')</option>'+opts+'</select><button data-test="'+esc(c.id)+'" style="flex:0">Test</button></div>';
-  }).join('');
+  }).join('') + (()=>{
+    const saveS = S; S = sc; const auto = pickNarratorVoice(); S = saveS;
+    return '<div class="row" style="margin-bottom:6px"><span style="flex:0 0 160px">Narrator</span><select id="narratorVoice"><option value="">(Automatic'+(auto? ': '+esc(auto.name):'')+')</option>'+opts+'</select><button id="btnTestNarrator" style="flex:0">Test</button></div>';
+  })();
   sc.characters.forEach(c=>{ const sel = document.querySelector('select[data-voice="'+c.id+'"]'); if(sel) sel.value = LS.get('voice_'+sc.id+'_'+c.id,''); });
+  $('narratorVoice').value = LS.get('voice_narrator','');
+  $('btnTestNarrator').onclick = ()=>{
+    LS.set('voice_narrator', $('narratorVoice').value); LS.set('rate', parseFloat($('rate').value));
+    const saveS = S; S = sc; stopSpeaking();
+    const u = new SpeechSynthesisUtterance('The support worker sits down. Cherry wipes her eyes and looks at the shelf.'); const v = pickNarratorVoice(); if(v) u.voice = v; u.rate = parseFloat($('rate').value)*0.95; speechSynthesis.speak(u);
+    S = saveS;
+  };
   document.querySelectorAll('button[data-test]').forEach(b=> b.onclick = ()=>{
     const c = sc.characters.find(x=>x.id===b.dataset.test); const sel = document.querySelector('select[data-voice="'+c.id+'"]');
     LS.set('voice_'+sc.id+'_'+c.id, sel.value); LS.set('rate', parseFloat($('rate').value));
@@ -870,7 +949,7 @@ function openSettings(){
   $('scenario').innerHTML = scenarios.map(s=>'<option value="'+esc(s.id)+'" '+(s.id===S.id?'selected':'')+'>'+esc(s.title)+'</option>').join('');
   renderCastAndVoices(S);
   $('scenario').onchange = ()=> renderCastAndVoices(scenarios.find(s=>s.id===$('scenario').value)||S);
-  $('speakOn').checked = LS.get('speakOn',true); $('rate').value = LS.get('rate',0.95); $('lang').value = LS.get('lang','en-AU');
+  $('speakOn').checked = LS.get('speakOn',true); $('rate').value = LS.get('rate',0.95); $('lang').value = LS.get('lang','en-AU'); $('narratorOn').checked = narratorOn();
   $('perStudent').value = String(cfg.perStudent()); $('coachOn').checked = cfg.coachOn(); $('lifelineOn').checked = cfg.lifelineOn(); $('briefOn').checked = cfg.brief();
   $('browserNote').innerHTML = (SR? 'Microphone input is available in this browser.' : 'This browser cannot do speech recognition. Open this file in <b>Google Chrome</b> or <b>Microsoft Edge</b>.') + (voices.length? ' '+voices.length+' voices found.' : ' No voices found yet, close and reopen Settings.');
   $('settings').classList.remove('hidden');
@@ -879,6 +958,7 @@ function saveSettings(){
   LS.set('apiKey', $('apiKey').value.trim());
   LS.set('model', $('model').value);
   LS.set('speakOn', $('speakOn').checked); LS.set('rate', parseFloat($('rate').value)); LS.set('lang', $('lang').value);
+  LS.set('narratorOn', $('narratorOn').checked); if($('narratorVoice')) LS.set('voice_narrator', $('narratorVoice').value);
   LS.set('perStudent', parseInt($('perStudent').value)); LS.set('coachOn', $('coachOn').checked); LS.set('lifelineOn', $('lifelineOn').checked); LS.set('brief', $('briefOn').checked);
   const sc = settingsScenario || S;
   const tp = [...document.querySelectorAll('select[data-cast]')].filter(s=>s.value==='teacher').map(s=>s.dataset.cast);
@@ -928,7 +1008,7 @@ function init(){
     stage = 'opening'; openingDone = new Set();
     const names = aiCharacters().map(c=>c.name).join(' and ');
     const joined = [{speaker:'', text: names+' have joined the video call and are waiting. Student 1: introduce yourself and open the meeting.'}];
-    showTurns(joined);
+    showTurns(joined); speakTurns([], joined[0].text);
     history = [{role:'user', content:'TEACHER: The video call has just connected. Wait quietly for the student to introduce themselves. Your first reply comes after their first message.'},{role:'assistant', content: JSON.stringify({turns:[], question_type:'', tip:'', coach:'', suggested_question:'', board:[], facts:[], opening:[]})}];
     lastTurns = []; student = newStudent(1, false); showCoach(openingHTML()); renderTurn(); saveSession();
   };
@@ -936,7 +1016,7 @@ function init(){
   $('btnSend').onclick = ()=>{ stopListening(); ask($('question').value); };
   $('question').addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); stopListening(); ask($('question').value); } });
   $('btnMic').onclick = ()=> listening? stopListening() : startListening();
-  $('btnRepeat').onclick = ()=> lastTurns.length && speakTurns(lastTurns);
+  $('btnRepeat').onclick = ()=> lastTurns.length && speakTurns(lastTurns, isVisit()? lastNarration : '');
   $('btnNext').onclick = nextStudent;
   $('btnLifeline').onclick = useLifeline;
 
@@ -954,7 +1034,7 @@ function init(){
   };
   $('btnChecklistDoc').onclick = ()=> download(S.id+'-checklist.doc', checklistDocHTML(), 'application/msword');
   let resetArmed = false;
-  $('btnReset').onclick = ()=>{ if(!resetArmed){ resetArmed=true; $('btnReset').textContent='Click again to clear everything'; setTimeout(()=>{resetArmed=false; $('btnReset').textContent='Reset';},4000); return; } resetArmed=false; $('btnReset').textContent='Reset'; stopSpeaking(); blankSession(); renderBoard(); saveSession(); toast('Cleared. Press Start meeting to begin again.'); };
+  $('btnReset').onclick = ()=>{ if(!resetArmed){ resetArmed=true; $('btnReset').textContent='Click again to clear everything'; setTimeout(()=>{resetArmed=false; $('btnReset').textContent='Reset';},4000); return; } resetArmed=false; $('btnReset').textContent='Reset'; stopSpeaking(); blankSession(); renderBoard(); saveSession(); toast(isVisit()? 'Cleared. Press Start visit to begin again.' : 'Cleared. Press Start meeting to begin again.'); };
 
   $('btnTeacher').onclick = ()=> $('drawer').classList.toggle('open');
   $('btnDrawerClose').onclick = ()=> $('drawer').classList.remove('open');
